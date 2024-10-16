@@ -9,16 +9,17 @@ func RegisterRoutes() *mux.Router {
     router := mux.NewRouter()
 	apiV1 := router.PathPrefix("/api/v1").Subrouter()
 
-	apiV1.HandleFunc("/user/register", handlers.RegisterUserHandler).Methods("GET")
-	apiV1.HandleFunc("/user/login", handlers.UserLoginHandler).Methods("GET")
-	apiV1.HandleFunc("/user", handlers.GetUserHandler).Methods("GET")
-	apiV1.HandleFunc("/user/shared_posts", handlers.UserLoginHandler).Methods("GET")
-	apiV1.HandleFunc("/user/scheduled_posts", handlers.UserLoginHandler).Methods("GET")
+	apiV1.HandleFunc("/user/signup", handlers.SignupUserHandler).Methods("POST")
+	apiV1.HandleFunc("/user/login", handlers.LoginUserHandler).Methods("POST")
+	apiV1.HandleFunc("/user/{id}/shared_posts", handlers.GetUserSharedBlogsHandler).Methods("GET")
+	apiV1.HandleFunc("/user/{id}/scheduled_posts", handlers.GetUserScheduledBlogsHandler).Methods("GET")
+	apiV1.HandleFunc("/user/{id}/notifications", handlers.GetUserNotificationsHandler).Methods("GET")
+	apiV1.HandleFunc("/user/{id}/notifications/clear", handlers.ClearUserNotificationsHandler).Methods("PUT")
 
-	apiV1.HandleFunc("/notifications", handlers.UserLoginHandler).Methods("GET")
-	apiV1.HandleFunc("/notifications/clear", handlers.UserLoginHandler).Methods("GET")
+	apiV1.HandleFunc("/blogs/share", handlers.GetUserSharedBlogsHandler).Methods("POST")
+	apiV1.HandleFunc("/blogs/schedule", handlers.GetUserSharedBlogsHandler).Methods("POST")
+	apiV1.HandleFunc("/blogs/schedule/delete", handlers.GetUserSharedBlogsHandler).Methods("DELETE")
 
 	return router
 
 }
-
