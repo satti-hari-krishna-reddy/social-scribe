@@ -17,7 +17,7 @@ func RegisterRoutes() *mux.Router {
 	apiV1.HandleFunc("/user/{id}/notifications/clear", handlers.ClearUserNotificationsHandler).Methods("PUT")
 
 	apiV1.HandleFunc("/blogs/share", handlers.GetUserSharedBlogsHandler).Methods("POST")
-	apiV1.HandleFunc("/blogs/schedule", handlers.GetUserSharedBlogsHandler).Methods("POST")
+	apiV1.HandleFunc("/blogs/schedule", handlers.ScheduleUserBlogHandler).Methods("POST")
 	apiV1.HandleFunc("/blogs/schedule/delete", handlers.GetUserSharedBlogsHandler).Methods("DELETE")
 
 	return router
