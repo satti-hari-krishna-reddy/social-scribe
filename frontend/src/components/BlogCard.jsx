@@ -33,9 +33,12 @@ const BlogCard = ({ blog }) => {
   const handleShareClick = (event) => setAnchorEl(event.currentTarget); 
   const handleCloseShare = () => setAnchorEl(null); 
   const handleOpenSchedule = () => setOpenSchedule(true); 
-  const handleCloseSchedule = () => setOpenSchedule(false); 
-
-  const handleDateChange = (newDate) => setSelectedDate(newDate);
+  const handleCloseSchedule = () => {setOpenSchedule(false); 
+    console.log(selectedDate)
+  }
+  const handleDateChange = (newDate) => {setSelectedDate(newDate);
+    console.log(newDate)
+  }
 
   const handleShareOptionChange = (event) => {
     setShareOptions({ ...shareOptions, [event.target.name]: event.target.checked });
