@@ -1,12 +1,14 @@
 package handlers
 
 import (
+	"bytes"
 	"encoding/json"
 	"log"
 	"net/http"
 	"social-scribe/backend/internal/models"
 	repo "social-scribe/backend/internal/repositories"
 	"strings"
+	"time"
 
 	"github.com/gorilla/mux"
 	"golang.org/x/crypto/bcrypt"
@@ -113,7 +115,7 @@ func LoginUserHandler(resp http.ResponseWriter, req *http.Request) {
 func GetUserNotificationsHandler(resp http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	userId := vars["id"]
-	if len(userId) == 0{
+	if len(userId) == 0 {
 		http.Error(resp, `{"error": "cant able parse id field, reason is missing id field in the request"}`, http.StatusBadRequest)
 		return
 	}
@@ -240,4 +242,74 @@ func ClearUserNotificationsHandler(resp http.ResponseWriter, req *http.Request) 
 	}
 	resp.WriteHeader(200)
 	resp.Write([]byte(`{"success" : true, "message" : "notifications cleared sucessfully"}`))
+}
+
+func ScheduleUserBlogHandler(resp http.ResponseWriter, req *http.Request) {
+	var blogData models.ScheduledBlogData
+	decoder := json.NewDecoder(req.Body)
+	defer req.Body.Close()
+
+	if err := decoder.Decode(&blogData); err != nil {
+		http.Error(resp, "Bad request, failed to parse JSON", http.StatusBadRequest)
+		return
+	}
+
+	if len(blogData.UserID) == 0 {
+		resp.WriteHeader(http.StatusBadRequest)
+		resp.Write([]byte(`{"success" : false, "reason" : "no user id found"}`))
+		return
+	}
+
+	user, err := repo.GetUserById(blogData.UserID)
+	if err != nil {
+		resp.WriteHeader(http.StatusInternalServerError)
+		resp.Write([]byte(`{"success" : false}`))
+		return
+	}
+
+	if user == nil {
+		resp.WriteHeader(http.StatusBadRequest)
+		resp.Write([]byte(`{"success" : false, "reason" : "user id is not valid"}`))
+		return
+	}
+
+	if  len(blogData.ScheduledBlog.ScheduledTime) == 0{
+		resp.WriteHeader(http.StatusBadRequest)
+		resp.Write([]byte(`{"success" : false, "reason" : "scheduled time is missing"}`))
+		return
+	}
+
+
+	_, err = time.Parse(time.RFC3339, blogData.ScheduledBlog.ScheduledTime)
+	if err != nil {
+		resp.WriteHeader(http.StatusBadRequest)
+		resp.Write([]byte(`{"success" : false, "reason" : "invalid scheduled time format, must be RFC3339"}`))
+		return
+	}
+
+	if err := blogData.ScheduledBlog.Validate(); err != nil {
+		http.Error(resp, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	durableFunctionURL := "https://<your-function-app>.azurewebsites.net/api/orchestrator"
+	reqBody, _ := json.Marshal(blogData)
+
+	durableResp, err := http.Post(durableFunctionURL, "application/json", bytes.NewBuffer(reqBody))
+	if err != nil || durableResp.StatusCode != http.StatusOK {
+		log.Printf("[DEBUG] Failed to create durable function, reason: %s", err)
+		resp.WriteHeader(http.StatusInternalServerError)
+		resp.Write([]byte(`{"success": false, "reason": "failed to create a cloud function"}`))
+		return
+	}
+
+	var instanceID string
+	if err := json.NewDecoder(durableResp.Body).Decode(&instanceID); err != nil {
+		resp.WriteHeader(http.StatusInternalServerError)
+		resp.Write([]byte(`{"success": false}`))
+		return
+	}
+
+	resp.WriteHeader(http.StatusOK)
+	resp.Write([]byte("Blog scheduled validated"))
 }
