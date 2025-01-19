@@ -5,9 +5,7 @@ import NotificationsIcon from '@mui/icons-material/Notifications';
 const NotificationBell = () => {
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState([
-    'You have new notifications!',
-    'Check new blogs',
-    'Some scheduled blogs need review'
+    'You have no new notifications!',
   ]);
 
   const handleOpen = () => setOpen(true);
