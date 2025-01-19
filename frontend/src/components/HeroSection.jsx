@@ -3,7 +3,7 @@ import { Box, Typography, Button } from '@mui/material';
 import Login from './LoginModal'; 
 import SignUpModal from './SignUpModal'; 
 
-const HeroSection = () => {
+const HeroSection = ({setIsLoggedIn, setUser}) => {
   const [openLogin, setOpenLogin] = useState(false); 
   const [openSignUp, setOpenSignUp] = useState(false); 
 
@@ -65,8 +65,8 @@ const HeroSection = () => {
         </Button>
       </Box>
       
-      <Login open={openLogin} handleClose={() => setOpenLogin(false)} />
-      <SignUpModal open={openSignUp} handleClose={() => setOpenSignUp(false)} />
+      <Login open={openLogin} handleClose={() => setOpenLogin(false)} setUser={setUser} setIsLoggedIn={setIsLoggedIn} />
+      <SignUpModal open={openSignUp} handleClose={() => setOpenSignUp(false)} setIsLoggedIn={setIsLoggedIn} setUser={setUser} />
     </Box>
   );
 };
