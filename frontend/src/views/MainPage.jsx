@@ -6,11 +6,11 @@ import CallToAction from '../components/CallToAction';
 import Footer from '../components/Footer';
 import About from '../components/About';
 
-function MainPage() {
+function MainPage({ setIsLoggedIn, setUser }) {
     
   return (
     <div>
-      <HeroSection />
+      <HeroSection setIsLoggedIn={setIsLoggedIn} setUser={setUser} />
       <HowItWorks />
       <CallToAction />
       <Features />
