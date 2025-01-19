@@ -10,29 +10,27 @@ import TwitterIcon from "@mui/icons-material/Twitter";
 import LinkedInIcon from "@mui/icons-material/LinkedIn";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 
-const VerificationPage = () => {
-  const [twitterConnected, setTwitterConnected] = useState(null);
-  const [linkedinConnected, setLinkedinConnected] = useState(null);
-  const [hashnodeVerified, setHashnodeVerified] = useState(false);
-  const [emailVerified, setEmailVerified] = useState("");
-  const [email, setEmail] = useState("hari66.hks@gmail.com");
+const VerificationPage = ({user, setUser}) => {
+  const [twitterConnected, setTwitterConnected] = useState(user?.twitterConnected);
+  const [linkedinConnected, setLinkedinConnected] = useState(user?.linkedinConnected);
+  const [hashnodeVerified, setHashnodeVerified] = useState(user?.hashnodeVerified);
+  const [emailVerified, setEmailVerified] = useState(user?.emailVerified);
+  const [email, setEmail] = useState(user?.username);
   const [hashnodeApiKey, setHashnodeApiKey] = useState("");
   const [otp, setOtp] = useState("");
   const [otpStatus, setOtpStatus] = useState(null);
   const [disabled, setDisabled] = useState(true);
 
+
   const handleTwitterConnect = () => {
-    // Simulate API call
-    setTwitterConnected(true);
+    window.location.href = "http://localhost:9696/api/v1/user/connect-twitter";
   };
 
   const handleLinkedInConnect = () => {
-    // Simulate API call
-    setLinkedinConnected(true);
+    window.location.href = "http://localhost:9696/api/v1/user/connect-linkedin";
   };
 
   const handleHashnodeVerify = () => {
-    // Simulate API call
     if (hashnodeApiKey) {
       setHashnodeVerified(true);
     }
@@ -53,14 +51,24 @@ const VerificationPage = () => {
     setOtp("");
     setOtpStatus(null);
   };
+  
+  const handleNext = () => {
+    setUser({
+      ...user,
+      twitterConnected,
+      linkedinConnected,
+      hashnodeVerified,
+      emailVerified,
+    });
+    window.location.href = "http://localhost:5173/blogs";
+  };
+
 
   useEffect(() => { 
     if (emailVerified && hashnodeVerified && (linkedinConnected || twitterConnected )) {
         setDisabled(false);
         }
     }, [emailVerified, hashnodeVerified, linkedinConnected, twitterConnected]);
-
-
 
 
   return (
@@ -70,7 +78,6 @@ const VerificationPage = () => {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: "#2E2E2E",
         color: "#FFFFFF",
         padding: "2rem",
       }}
@@ -211,9 +218,9 @@ const VerificationPage = () => {
           )}
 </>}
         </Box>
-        <Button sx={{ color: 'black', backgroundColor: 'white', marginTop : '20px', marginLeft : '450px' }} disabled={disabled}  onClick={handleHashnodeVerify}>
+        <Button sx={{ color: 'black', backgroundColor: 'white', marginTop : '20px', marginLeft : '450px' }} disabled={disabled}  onClick={handleNext}>
                 next
-              </Button>
+        </Button>
       </Box>
 
     </Box>
