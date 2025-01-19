@@ -1,15 +1,48 @@
 import React, { useState } from 'react';
 import { Box, Typography, TextField, Button, Modal } from '@mui/material';
+import { useNavigate } from 'react-router-dom';
 
-const SignUpModal = ({ open, handleClose }) => {
+const SignUpModal = ({ open, handleClose, setIsLoggedIn, setUser }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+  const navigate = useNavigate();
 
-  const handleSignUp = () => {
-    console.log("Sign Up Details", { email, password, confirmPassword });
+  const handleSignUp = async() => {
+
+    if (password !== confirmPassword) {
+      alert('Passwords do not match!');
+      return;
+    }
+    try {
+      const response = await fetch('http://localhost:9696/api/v1/user/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          username : email, 
+          password: password 
+        }),
+        credentials: 'include',
+      })
+      if (response.status === 409) {
+        setError('User already exists');
+        return;
+      }
+      const data = await response.json();
+      if (response.ok) {
+     
+      setUser(data);
+      setIsLoggedIn(true);
+      navigate('/verification');
+    } }
+      catch (error) {
+        console.error('Error fetching user:', error);
+        setUser(null);
+        setError('Error occurred');
+      }
   };
-
   return (
     <Modal
       open={open}
@@ -81,6 +114,7 @@ const SignUpModal = ({ open, handleClose }) => {
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}
         />
+        {error && <Typography color="red" variant="body2">{error}</Typography>}
 
         <Button 
           variant="contained" 
