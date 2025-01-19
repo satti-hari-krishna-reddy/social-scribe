@@ -1,20 +1,44 @@
 import React, { useState } from 'react';
 import { Modal, Box, Typography, TextField, Button, IconButton } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
+import { useNavigate } from 'react-router-dom';
 
-const Login = ({ open, handleClose }) => {
+const Login = ({ open, handleClose, setUser, setIsLoggedIn }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const navigate = useNavigate();
 
-  const handleLogin = () => {
-    if (email !== 'test@example.com' || password !== 'password123') {
-      setError('Username/Password is incorrect.');
-    } else {
+  const handleLogin = async () => {
+    try {
+      const response = await fetch('http://localhost:9696/api/v1/user/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: email,
+          password: password,
+      }),
+        credentials: 'include',
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setUser(data);
+        setIsLoggedIn(true);
+        const verified = data?.verified;
+        if (verified) {
+          navigate('/blogs');
+        } else {
+          navigate('/verification');
+        } 
+  } else {
+    setError(data.message);
+  }
 
-      handleClose();
-    }
-  };
+  }
+  catch (error) {
+    console.error('Error during login:', error);
+    setError('Error during login');
+  }}
 
   return (
     <Modal open={open} onClose={handleClose} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
