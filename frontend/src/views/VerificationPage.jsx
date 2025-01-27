@@ -11,15 +11,15 @@ import LinkedInIcon from "@mui/icons-material/LinkedIn";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 
 const VerificationPage = ({user, setUser}) => {
-  const [twitterConnected, setTwitterConnected] = useState(user?.twitterConnected);
-  const [linkedinConnected, setLinkedinConnected] = useState(user?.linkedinConnected);
-  const [hashnodeVerified, setHashnodeVerified] = useState(user?.hashnodeVerified);
-  const [emailVerified, setEmailVerified] = useState(user?.emailVerified);
-  const [email, setEmail] = useState(user?.username);
+  const [twitterConnected, ] = useState(user?.x_verified);
+  const [linkedinConnected, ] = useState(user?.linkedin_verified);
+  const [hashnodeVerified, ] = useState(user?.hashnode_verified);
   const [hashnodeApiKey, setHashnodeApiKey] = useState("");
-  const [otp, setOtp] = useState("");
-  const [otpStatus, setOtpStatus] = useState(null);
   const [disabled, setDisabled] = useState(true);
+  // const [emailVerified, ] = useState(true);
+  // const [otp, setOtp] = useState("");
+  // const [otpStatus, setOtpStatus] = useState(null);
+  // const [email, ] = useState(user?.username);
 
 
   const handleTwitterConnect = () => {
@@ -30,27 +30,49 @@ const VerificationPage = ({user, setUser}) => {
     window.location.href = "http://localhost:9696/api/v1/user/connect-linkedin";
   };
 
-  const handleHashnodeVerify = () => {
-    if (hashnodeApiKey) {
-      setHashnodeVerified(true);
+  const handleHashnodeVerify = async () => {
+    if (!hashnodeApiKey) {
+      return;
+    }
+
+    try {
+      const response = await fetch('http://localhost:9696/api/v1/user/verify-hashnode', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          key : hashnodeApiKey, 
+        }),
+        credentials: 'include',
+      });
+      if (response.ok) {
+        user.hashnode_verified = true
+        setUser(user);
+        setIsLoggedIn(true);
+      }
+    } catch (error) {
+      console.error('Error fetching user info:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleOtpVerify = () => {
-    // Simulate OTP verification
-    if (otp === "123456") {
-        setEmailVerified(true);
-      setOtpStatus("success");
-    } else {
-      setOtpStatus("failed");
-    }
-  };
+  // const handleOtpVerify = () => {
+  //   // Simulate OTP verification
+  //   if (otp === "123456") {
+  //       setEmailVerified(true);
+  //     setOtpStatus("success");
+  //   } else {
+  //     setOtpStatus("failed");
+  //   }
+  // };
 
-  const handleResendOtp = () => {
-    // Simulate OTP resend
-    setOtp("");
-    setOtpStatus(null);
-  };
+  // const handleResendOtp = () => {
+  //   // Simulate OTP resend
+  //   setOtp("");
+  //   setOtpStatus(null);
+  // };
   
   const handleNext = () => {
     setUser({
@@ -58,17 +80,16 @@ const VerificationPage = ({user, setUser}) => {
       twitterConnected,
       linkedinConnected,
       hashnodeVerified,
-      emailVerified,
     });
     window.location.href = "http://localhost:5173/blogs";
   };
 
 
   useEffect(() => { 
-    if (emailVerified && hashnodeVerified && (linkedinConnected || twitterConnected )) {
+    if (hashnodeVerified && (linkedinConnected || twitterConnected )) {
         setDisabled(false);
         }
-    }, [emailVerified, hashnodeVerified, linkedinConnected, twitterConnected]);
+    }, [hashnodeVerified, linkedinConnected, twitterConnected]);
 
 
   return (
@@ -178,7 +199,7 @@ const VerificationPage = ({user, setUser}) => {
         </Box>
 
         {/* Verify Email */}
-        <Box> 
+        {/* <Box> 
             {emailVerified ? (
                 <Box display="flex" alignItems="center" gap="1rem" marginBottom="0.5rem">
                  <Typography>{email}</Typography>
@@ -217,7 +238,7 @@ const VerificationPage = ({user, setUser}) => {
             </Typography>
           )}
 </>}
-        </Box>
+        </Box> */}
         <Button sx={{ color: 'black', backgroundColor: 'white', marginTop : '20px', marginLeft : '450px' }} disabled={disabled}  onClick={handleNext}>
                 next
         </Button>
