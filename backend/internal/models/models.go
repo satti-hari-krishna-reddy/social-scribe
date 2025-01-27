@@ -2,7 +2,6 @@ package models
 
 import (
 	"fmt"
-	"github.com/dghubble/oauth1"
 	"net/url"
 	"strings"
 	"time"
@@ -19,8 +18,10 @@ type User struct {
 	HashnodeVerified bool               `json:"hashnode_verified" bson:"hashnode_verified"`
 	LinkedinVerified bool               `json:"linkedin_verified" bson:"linkedin_verified"`
 	XVerified        bool               `json:"x_verified" bson:"x_verified"`
-	WebSocketUrl     string             `json:"websocket_url" bson:"websocket_url"`
-	XoauthKey        oauth1.Token       `json:"xoauth_key" bson:"xoauth_key"`
+	WebHookUrl       string             `json:"webhook_url" bson:"webhook_url"`
+	HashnodeBlog     string             `json:"hashnode_blog" bson:"hashnode_blog"`
+	XOAuthToken      string             `json:"x_oauth_token" bson:"x_oauth_token"`
+	XOAuthSecret     string             `json:"x_oauth_secret" bson:"x_oauth_secret"`
 	LinkedInOauthKey string             `json:"linkedin_oauth_key" bson:"linkedin_oauth_key"`
 	HashnodePAT      string             `json:"hashnode_pat" bson:"hashnode_pat"`
 	SharedBlogs      []SharedBlog       `json:"shared_posts" bson:"shared_posts"`
@@ -50,9 +51,9 @@ type Blog struct {
 	Id                string `json:"id" bson:"id"`
 	Title             string `json:"title" bson:"title"`
 	Url               string `json:"url" bson:"url"`
-	CoverImage        Image  `json:"cover_image" bson:"cover_image"`
+	CoverImage        Image  `json:"coverImage" bson:"coverImage"`
 	Author            Author `json:"author" bson:"author"`
-	ReadTimeInMinutes int    `json:"read_time_in_minutes" bson:"read_time_in_minutes"`
+	ReadTimeInMinutes int    `json:"readTimeInMinutes" bson:"readTimeInMinutes"`
 }
 
 type Image struct {
@@ -114,6 +115,16 @@ type GraphQLResponse struct {
 
 type TweetRequest struct {
 	Tweet string `json:"tweet"`
+}
+
+type HashnodeKey struct {
+	Key string `json:"key"`
+}
+
+type CacheItem struct {
+	Key       string      `bson:"key"`
+	Value     interface{} `bson:"value"`
+	ExpiresAt time.Time   `bson:"expiresAt,omitempty"`
 }
 
 func (b *Blog) ValidateBase() error {
