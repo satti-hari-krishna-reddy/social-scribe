@@ -468,59 +468,93 @@ func ScheduleUserBlogHandler(resp http.ResponseWriter, req *http.Request) {
 	resp.Write([]byte("Blog scheduled validated"))
 }
 
-func GetUserBlogsHandler(host string) ([]models.Edge, error) {
+func GetUserBlogsHandler(w http.ResponseWriter, r *http.Request) {
+	userId, err := ValidateLogin(r)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	user, err := repo.GetUserById(userId)
+	if err != nil {
+		log.Printf("[ERROR] Failed to get user for the id: %s and error is %s", userId, err)
+		return
+	}
+	if user == nil {
+		log.Printf("[ERROR] User with id: %s not found", userId)
+		return
+	}
+	host := user.HashnodeBlog
+	log.Printf("Host: %s", host)
+
+
 	// Define the GraphQL endpoint
 	endpoint := "https://gql.hashnode.com"
 
 	// Define the GraphQL query
 	query := models.GraphQLQuery{
-		Query: fmt.Sprintf(`
+		Query: `
 			query Publication {
-			  publication(host: \"%s\") {
-			    posts(first: 0) {
-			      edges {
-			        node {
-			          title
-			          url
-			          id
-			          coverImage {
-			            url
-			          }
-			          author {
-			            name
-			          }
-			          readTimeInMinutes
-			        }
-			      }
-			    }
-			  }
+				publication(host: "` + host + `") {
+					posts(first: 0) {
+						edges {
+							node {
+								title
+								url
+								id
+								coverImage { url }
+								author { name }
+								readTimeInMinutes
+							}
+						}
+					}
+				}
 			}
-		`, host),
-	}
+		`,
+	}	
 
 	queryBytes, err := json.Marshal(query)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal query: %v", err)
+		log.Printf("[ERROR] Failed to marshal query: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
 	}
+
+	log.Printf("GraphQL Query: %s", string(queryBytes))
 
 	headers := map[string]string{
 		"Content-Type": "application/json",
-		// "Authorization": "Bearer YOUR_ACCESS_TOKEN",
 	}
 
 	response, err := makePostRequest(endpoint, queryBytes, headers)
 	if err != nil {
-		return nil, fmt.Errorf("failed to make GraphQL request: %v", err)
+		log.Printf("[ERROR] Failed to make request: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
 	}
 
 	var gqlResponse models.GraphQLResponse
 	err = json.Unmarshal(response, &gqlResponse)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse response: %v", err)
+		log.Printf("[ERROR] Failed to unmarshal response: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
 	}
 
 	edges := gqlResponse.Data.Publication.Posts.Edges
-	return edges, nil
+	var posts []models.PostNode
+	for _, edge := range edges {
+		posts = append(posts, edge.Node)
+	}
+	// Return the posts
+	responseBytes, err := json.Marshal(posts)
+	if err != nil {
+		log.Printf("[ERROR] Failed to marshal response: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(fmt.Sprintf(`{"success": true, "blogs": %s}`, string(responseBytes))))
+
 }
 
 func makePostRequest(url string, body []byte, headers map[string]string) ([]byte, error) {
