@@ -13,7 +13,7 @@ const BlogGrid = ({ blogs }) => {
       <Grid container spacing={4}>
         {blogs.map((blog, index) => (
           <Grid item xs={12} sm={6} md={4} key={index}>
-            <BlogCard blog={blog.node} />
+            <BlogCard blog={blog} />
           </Grid>
         ))}
       </Grid>
