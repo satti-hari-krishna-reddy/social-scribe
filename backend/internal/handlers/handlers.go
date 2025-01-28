@@ -474,87 +474,97 @@ func GetUserBlogsHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
+
 	user, err := repo.GetUserById(userId)
 	if err != nil {
-		log.Printf("[ERROR] Failed to get user for the id: %s and error is %s", userId, err)
+		log.Printf("[ERROR] Failed to get user for id: %s - %v", userId, err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 	if user == nil {
 		log.Printf("[ERROR] User with id: %s not found", userId)
+		http.Error(w, "User not found", http.StatusNotFound)
 		return
 	}
-	host := user.HashnodeBlog
-	log.Printf("Host: %s", host)
 
+	category := strings.ToLower(r.URL.Query().Get("category"))
+	if category == "" {
+		category = "all"
+	} else if category != "all" && category != "scheduled" && category != "shared" {
+		http.Error(w, "Invalid category", http.StatusBadRequest)
+		return
+	}
 
-	// Define the GraphQL endpoint
-	endpoint := "https://gql.hashnode.com"
+	var responseBytes []byte
+	var jsonErr error
 
-	// Define the GraphQL query
-	query := models.GraphQLQuery{
-		Query: `
-			query Publication {
-				publication(host: "` + host + `") {
-					posts(first: 0) {
-						edges {
-							node {
-								title
-								url
-								id
-								coverImage { url }
-								author { name }
-								readTimeInMinutes
-							}
-						}
-					}
-				}
-			}
-		`,
-	}	
+	switch category {
+	case "scheduled":
+		responseBytes, jsonErr = json.Marshal(user.ScheduledBlogs)
+	case "shared":
+		responseBytes, jsonErr = json.Marshal(user.SharedBlogs)
+	default:
+		// Handle "all" case with GraphQL
+		endpoint := "https://gql.hashnode.com"
+		query := models.GraphQLQuery{
+			Query: fmt.Sprintf(`
+                query Publication {
+                    publication(host: "%s") {
+                        posts(first: 20) {
+                            edges {
+                                node {
+                                    title
+                                    url
+                                    id
+                                    coverImage { url }
+                                    author { name }
+                                    readTimeInMinutes
+                                }
+                            }
+                        }
+                    }
+                }`, user.HashnodeBlog),
+		}
 
-	queryBytes, err := json.Marshal(query)
-	if err != nil {
-		log.Printf("[ERROR] Failed to marshal query: %v", err)
+		queryBytes, err := json.Marshal(query)
+		if err != nil {
+			log.Printf("[ERROR] Failed to marshal query: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		headers := map[string]string{"Content-Type": "application/json"}
+		gqlResponse, err := makePostRequest(endpoint, queryBytes, headers)
+		if err != nil {
+			log.Printf("[ERROR] Failed to make request: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		var gqlData models.GraphQLResponse
+		if err := json.Unmarshal(gqlResponse, &gqlData); err != nil {
+			log.Printf("[ERROR] Failed to unmarshal response: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		var posts []models.PostNode
+		for _, edge := range gqlData.Data.Publication.Posts.Edges {
+			posts = append(posts, edge.Node)
+		}
+		responseBytes, jsonErr = json.Marshal(posts)
+	}
+
+	// Handle JSON marshaling errors
+	if jsonErr != nil {
+		log.Printf("[ERROR] Failed to marshal response: %v", jsonErr)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
-	log.Printf("GraphQL Query: %s", string(queryBytes))
-
-	headers := map[string]string{
-		"Content-Type": "application/json",
-	}
-
-	response, err := makePostRequest(endpoint, queryBytes, headers)
-	if err != nil {
-		log.Printf("[ERROR] Failed to make request: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
-
-	var gqlResponse models.GraphQLResponse
-	err = json.Unmarshal(response, &gqlResponse)
-	if err != nil {
-		log.Printf("[ERROR] Failed to unmarshal response: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
-
-	edges := gqlResponse.Data.Publication.Posts.Edges
-	var posts []models.PostNode
-	for _, edge := range edges {
-		posts = append(posts, edge.Node)
-	}
-	// Return the posts
-	responseBytes, err := json.Marshal(posts)
-	if err != nil {
-		log.Printf("[ERROR] Failed to marshal response: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(fmt.Sprintf(`{"success": true, "blogs": %s}`, string(responseBytes))))
-
 }
 
 func makePostRequest(url string, body []byte, headers map[string]string) ([]byte, error) {
