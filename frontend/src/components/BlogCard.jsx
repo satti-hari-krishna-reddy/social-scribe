@@ -19,6 +19,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { LocalizationProvider } from '@mui/x-date-pickers';
+import { toast } from "react-toastify"; 
 import dayjs from 'dayjs';
 
 const BlogCard = ({ blog }) => {
@@ -44,16 +45,45 @@ const BlogCard = ({ blog }) => {
     setShareOptions({ ...shareOptions, [event.target.name]: event.target.checked });
   };
 
-  const handleConfirmShare = () => {
-
-    if (shareOptions.linkedin) {
-      console.log("Sharing to LinkedIn");
+  const handleConfirmShare = async () => {
+    const platforms = [];
+    if (shareOptions.linkedin) platforms.push("linkedin");
+    if (shareOptions.x) platforms.push("twitter");
+  
+    if (platforms.length === 0) {
+      toast.warning("Please select at least one platform to share!");
+      return;
     }
-    if (shareOptions.x) {
-      console.log("Sharing to X");
+  
+    const requestBody = {
+      id: blog.id,
+      platforms,
+    };
+  
+    try {
+      const response = await fetch("http://localhost:9696/api/v1/blogs/user/share", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify(requestBody),
+      });
+  
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to share the blog");
+      }
+  
+      toast.success("Blog shared successfully!");
+    } catch (error) {
+      console.error("Error sharing the blog:", error.message);
+      toast.error("Failed to share the blog. Please try again!");
+    } finally {
+      handleCloseShare(); 
     }
-    handleCloseShare(); 
   };
+  
 
   const open = Boolean(anchorEl);
   const id = open ? 'share-popover' : undefined;
