@@ -1,25 +1,23 @@
-import React, { useState } from 'react';
-import { Tabs, Tab } from '@mui/material';
+import React from "react";
+import { Tabs, Tab } from "@mui/material";
 
-const BlogSectionTabs = () => {
-  const [value, setValue] = useState(0);
-
+const BlogSectionTabs = ({ activeTab, onTabChange }) => {
   const handleChange = (event, newValue) => {
-    setValue(newValue);
+    onTabChange(newValue);
   };
 
   return (
-    <div style={{ marginTop: '20px' }}> 
+    <div style={{ marginTop: "20px" }}>
       <Tabs
-        value={value}
+        value={activeTab}
         onChange={handleChange}
         indicatorColor="secondary"
         textColor="white"
         centered
       >
-        <Tab label="All Blogs" />
-        <Tab label="Scheduled Blogs" />
-        <Tab label="Shared Blogs" />
+        <Tab label="All Blogs" value="all" />
+        <Tab label="Scheduled Blogs" value="scheduled" />
+        <Tab label="Shared Blogs" value="shared" />
       </Tabs>
     </div>
   );
