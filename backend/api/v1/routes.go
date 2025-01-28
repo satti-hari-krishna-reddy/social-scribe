@@ -14,7 +14,7 @@ func RegisterRoutes() *mux.Router {
 	apiV1.HandleFunc("/user/signup", handlers.SignupUserHandler).Methods(http.MethodPost)
 	apiV1.HandleFunc("/user/login", handlers.LoginUserHandler).Methods(http.MethodPost)
 	apiV1.HandleFunc("/user/scheduled_posts", handlers.GetUserScheduledBlogsHandler).Methods(http.MethodGet, http.MethodOptions)
-	// apiV1.HandleFunc("/user/posts", handlers.GetUserBlogsHandler).Methods(http.MethodGet, http.MethodOptions)
+	apiV1.HandleFunc("/user/blogs", handlers.GetUserBlogsHandler).Methods(http.MethodGet, http.MethodOptions)
 	apiV1.HandleFunc("/user/getinfo", handlers.GetUserInfoHandler).Methods(http.MethodGet)
 
 	apiV1.HandleFunc("/user/notifications", handlers.GetUserNotificationsHandler).Methods(http.MethodGet, http.MethodOptions)
