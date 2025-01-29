@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   Card,
   CardMedia,
@@ -23,23 +24,23 @@ import { toast } from "react-toastify";
 import dayjs from 'dayjs';
 
 const BlogCard = ({ blog }) => {
-  const [anchorEl, setAnchorEl] = useState(null); 
-  const [openSchedule, setOpenSchedule] = useState(false); 
-  const [selectedDate, setSelectedDate] = useState(dayjs()); 
+  const location = useLocation();
+  const queryParams = new URLSearchParams(location.search);
+  const tab = queryParams.get('tab');
+  
+  const [anchorEl, setAnchorEl] = useState(null);
+  const [openSchedule, setOpenSchedule] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(dayjs());
   const [shareOptions, setShareOptions] = useState({
     linkedin: false,
     x: false,
   });
 
-  const handleShareClick = (event) => setAnchorEl(event.currentTarget); 
-  const handleCloseShare = () => setAnchorEl(null); 
-  const handleOpenSchedule = () => setOpenSchedule(true); 
-  const handleCloseSchedule = () => {setOpenSchedule(false); 
-    console.log(selectedDate)
-  }
-  const handleDateChange = (newDate) => {setSelectedDate(newDate);
-    console.log(newDate)
-  }
+  const handleShareClick = (event) => setAnchorEl(event.currentTarget);
+  const handleCloseShare = () => setAnchorEl(null);
+  const handleOpenSchedule = () => setOpenSchedule(true);
+  const handleCloseSchedule = () => setOpenSchedule(false);
+  const handleDateChange = (newDate) => setSelectedDate(newDate);
 
   const handleShareOptionChange = (event) => {
     setShareOptions({ ...shareOptions, [event.target.name]: event.target.checked });
@@ -55,35 +56,34 @@ const BlogCard = ({ blog }) => {
       return;
     }
   
-    const requestBody = {
-      id: blog.id,
-      platforms,
-    };
-  
     try {
       const response = await fetch("http://localhost:9696/api/v1/blogs/user/share", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify(requestBody),
+        body: JSON.stringify({ id: blog.id, platforms }),
       });
-  
+
+      const data = await response.json();
+
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || "Failed to share the blog");
+        throw new Error(data.message || "Failed to share the blog");
       }
-  
+
       toast.success("Blog shared successfully!");
     } catch (error) {
       console.error("Error sharing the blog:", error.message);
-      toast.error("Failed to share the blog. Please try again!");
+      toast.error(error.message || "Failed to share the blog. Please try again!");
     } finally {
-      handleCloseShare(); 
+      handleCloseShare();
     }
   };
-  
+
+  const handleCancelSchedule = () => {
+    // Implement your cancel schedule logic here
+    console.log('Cancel schedule for:', blog.id);
+    toast.info("Schedule canceled");
+  };
 
   const open = Boolean(anchorEl);
   const id = open ? 'share-popover' : undefined;
@@ -108,101 +108,167 @@ const BlogCard = ({ blog }) => {
         </CardContent>
       </CardActionArea>
 
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', padding: '10px', gap: '8px', position: 'absolute', bottom: 0, right: 0 }}>
- 
-        <Button
-          variant="contained"
-          sx={{ backgroundColor: 'white', color: 'black', fontSize: '12px', textTransform: 'none', minWidth: '60px', padding: '5px' }}
-          onClick={handleShareClick}
-        >
-          Share
-        </Button>
-
-   
-        <Popover
-          id={id}
-          open={open}
-          anchorEl={anchorEl}
-          onClose={handleCloseShare}
-          anchorOrigin={{
-            vertical: 'bottom',
-            horizontal: 'left',
-          }}
-        >
-          <Box sx={{ padding: '10px', display: 'flex', flexDirection: 'column', backgroundColor: 'black' }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between'}}>
-              <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'white' }}>Share to:</Typography>
-              <IconButton size="small" onClick={handleCloseShare}>
-                <CloseIcon />
-              </IconButton>
-            </Box>
-            <FormControlLabel
-              control={<Checkbox sx={{ color: 'white' }} checked={shareOptions.linkedin} onChange={handleShareOptionChange} name="linkedin" />}
-              label={
-                <Typography sx={{ color: 'white' }}>LinkedIn</Typography>
-              }
-            />
-            <FormControlLabel
-              control={<Checkbox sx={{ color: 'white' }} checked={shareOptions.x} onChange={handleShareOptionChange} name="x" />}
-              label={
-                <Typography sx={{ color: 'white' }}>X</Typography>
-              }
-            />
-            <Button
-              variant="contained"
-              color="secondary"
-              sx={{ marginTop: '10px' }}
-              onClick={handleConfirmShare}
-            >
-              OK
-            </Button>
-          </Box>
-        </Popover>
-
-      
-        <Button
-          variant="outlined"
-          sx={{ borderColor: 'white', color: 'white', fontSize: '12px', textTransform: 'none', minWidth: '60px', padding: '5px' }}
-          onClick={handleOpenSchedule}
-        >
-          Schedule
-        </Button>
-
-   
-        <Modal open={openSchedule} onClose={handleCloseSchedule}>
-          <Box sx={{ 
-            width: 400, 
-            padding: '20px', 
-            margin: 'auto', 
-            marginTop: '10%', 
-            backgroundColor: '#2E2E2E', 
-            borderRadius: '10px', 
-            color: 'white' 
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'flex-end', 
+        padding: '10px', 
+        gap: '8px', 
+        position: 'absolute', 
+        bottom: 0, 
+        right: 0 
+      }}>
+        {tab === 'shared' ? (
+          <Typography variant="body2" sx={{ 
+            color: '#909090',
+            padding: '6px 12px',
+            fontSize: '14px',
+            alignSelf: 'center'
           }}>
-            <Typography variant="h6" gutterBottom>
-              Schedule Post
-            </Typography>
-            <LocalizationProvider dateAdapter={AdapterDayjs}>
-              <DateTimePicker
-                label="Select Date & Time"
-                value={selectedDate}
-                onChange={handleDateChange}
-                disablePast
-                maxDate={dayjs().add(7, 'day')} // Max 7 days from now
-                format="YYYY-MM-DD HH:mm" // Set to 24-hour format
-                renderInput={(props) => <TextField {...props} fullWidth sx={{ backgroundColor: 'white', borderRadius: '5px' }} />}
-              />
-            </LocalizationProvider>
+            Shared on {dayjs(blog.shared_time).format('MMM D, YYYY [at] HH:mm')}
+          </Typography>
+        ) : tab === 'scheduled' ? (
+          <Button
+            variant="outlined"
+            sx={{ 
+              borderColor: '#ff4444', 
+              color: '#ff4444', 
+              '&:hover': { borderColor: '#cc0000' },
+              fontSize: '12px', 
+              textTransform: 'none', 
+              minWidth: '60px', 
+              padding: '5px' 
+            }}
+            onClick={handleCancelSchedule}
+          >
+            Cancel
+          </Button>
+        ) : (
+          <>
             <Button
               variant="contained"
-              color="secondary"
-              sx={{ marginTop: '20px', width: '100%' }}
-              onClick={handleCloseSchedule}
+              sx={{ 
+                backgroundColor: 'white', 
+                color: 'black', 
+                fontSize: '12px', 
+                textTransform: 'none', 
+                minWidth: '60px', 
+                padding: '5px',
+                '&:hover': { backgroundColor: '#f0f0f0' }
+              }}
+              onClick={handleShareClick}
             >
-              Confirm Schedule
+              Share
             </Button>
-          </Box>
-        </Modal>
+
+            <Popover
+              id={id}
+              open={open}
+              anchorEl={anchorEl}
+              onClose={handleCloseShare}
+              anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+            >
+              <Box sx={{ 
+                padding: '10px', 
+                display: 'flex', 
+                flexDirection: 'column', 
+                backgroundColor: '#2E2E2E' 
+              }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'white' }}>Share to:</Typography>
+                  <IconButton size="small" onClick={handleCloseShare} sx={{ color: 'white' }}>
+                    <CloseIcon />
+                  </IconButton>
+                </Box>
+                <FormControlLabel
+                  control={<Checkbox sx={{ color: 'white' }} checked={shareOptions.linkedin} onChange={handleShareOptionChange} name="linkedin" />}
+                  label={<Typography sx={{ color: 'white' }}>LinkedIn</Typography>}
+                />
+                <FormControlLabel
+                  control={<Checkbox sx={{ color: 'white' }} checked={shareOptions.x} onChange={handleShareOptionChange} name="x" />}
+                  label={<Typography sx={{ color: 'white' }}>X</Typography>}
+                />
+                <Button
+                  variant="contained"
+                  color="primary"
+                  sx={{ 
+                    marginTop: '10px',
+                    backgroundColor: '#1976d2',
+                    '&:hover': { backgroundColor: '#1565c0' }
+                  }}
+                  onClick={handleConfirmShare}
+                >
+                  Share Now
+                </Button>
+              </Box>
+            </Popover>
+
+            <Button
+              variant="outlined"
+              sx={{ 
+                borderColor: 'white', 
+                color: 'white', 
+                fontSize: '12px', 
+                textTransform: 'none', 
+                minWidth: '60px', 
+                padding: '5px',
+                '&:hover': { borderColor: '#e0e0e0' }
+              }}
+              onClick={handleOpenSchedule}
+            >
+              Schedule
+            </Button>
+
+            <Modal open={openSchedule} onClose={handleCloseSchedule}>
+              <Box sx={{ 
+                width: 400, 
+                padding: '20px', 
+                margin: 'auto', 
+                marginTop: '10%', 
+                backgroundColor: '#2E2E2E', 
+                borderRadius: '10px', 
+                color: 'white' 
+              }}>
+                <Typography variant="h6" gutterBottom>
+                  Schedule Post
+                </Typography>
+                <LocalizationProvider dateAdapter={AdapterDayjs}>
+                  <DateTimePicker
+                    label="Select Date & Time"
+                    value={selectedDate}
+                    onChange={handleDateChange}
+                    disablePast
+                    maxDate={dayjs().add(7, 'day')}
+                    format="YYYY-MM-DD HH:mm"
+                    renderInput={(props) => (
+                      <TextField 
+                        {...props} 
+                        fullWidth 
+                        sx={{ 
+                          backgroundColor: '#424242', 
+                          borderRadius: '5px',
+                          '& .MuiInputBase-input': { color: 'white' }
+                        }} 
+                      />
+                    )}
+                  />
+                </LocalizationProvider>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  sx={{ 
+                    marginTop: '20px', 
+                    width: '100%',
+                    backgroundColor: '#1976d2',
+                    '&:hover': { backgroundColor: '#1565c0' }
+                  }}
+                  onClick={handleCloseSchedule}
+                >
+                  Confirm Schedule
+                </Button>
+              </Box>
+            </Modal>
+          </>
+        )}
       </Box>
     </Card>
   );
