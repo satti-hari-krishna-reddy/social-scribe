@@ -13,6 +13,7 @@ import (
 var client *mongo.Client
 var userCollection *mongo.Collection
 var cacheCollection *mongo.Collection
+var scheduledItemsCollection *mongo.Collection
 
 func InitMongoDb() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -34,6 +35,7 @@ func InitMongoDb() {
 
 	userCollection = client.Database(dbName).Collection("users")
 	cacheCollection = client.Database(dbName).Collection("cache")
+	scheduledItemsCollection = client.Database(dbName).Collection("scheduled_items")
 
 	err = CreateIndexes()
 	if err != nil {
@@ -54,6 +56,10 @@ func CreateIndexes() error {
 		// Unique index for cache keys
 		{
 			Keys:    bson.D{{Key: "key", Value: 1}},
+			Options: options.Index().SetUnique(true),
+		},
+		{
+			Keys:    bson.D{{Key: "id", Value: 1}},
 			Options: options.Index().SetUnique(true),
 		},
 	}
