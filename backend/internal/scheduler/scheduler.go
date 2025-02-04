@@ -6,8 +6,8 @@ import (
 	"log"
 	"social-scribe/backend/internal/models"
 	repo "social-scribe/backend/internal/repositories"
+	"sync"
 	"time"
-    "sync"
 )
 
 type TaskHeap []models.ScheduledBlogData
@@ -34,12 +34,11 @@ func (h *TaskHeap) Pop() interface{} {
 
 type Scheduler struct {
 	heap      *TaskHeap
-	mu        sync.Mutex        
+	mu        sync.Mutex
 	ctx       context.Context
 	cancel    context.CancelFunc
-	newTaskCh chan struct{}      
+	newTaskCh chan struct{}
 }
-
 
 func NewScheduler() *Scheduler {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -59,7 +58,7 @@ func NewScheduler() *Scheduler {
 }
 
 func (s *Scheduler) runAgent() {
-	var timer *time.Timer 
+	var timer *time.Timer
 
 	for {
 		// Check the if heap is empty and if so, wait for new tasks
@@ -68,9 +67,9 @@ func (s *Scheduler) runAgent() {
 			log.Println("[INFO] No tasks in the heap, waiting for new tasks")
 			s.mu.Unlock()
 			select {
-			case <-s.newTaskCh: 
+			case <-s.newTaskCh:
 				continue
-			case <-s.ctx.Done(): 
+			case <-s.ctx.Done():
 				return
 			}
 		}
@@ -89,16 +88,16 @@ func (s *Scheduler) runAgent() {
 		select {
 		case <-timer.C:
 			s.mu.Lock()
-			heap.Pop(s.heap) 
+			heap.Pop(s.heap)
 			s.mu.Unlock()
-			go s.worker(nextTask) 
+			go s.worker(nextTask)
 
-		case <-s.newTaskCh: 
+		case <-s.newTaskCh:
 			if !timer.Stop() {
-				<-timer.C 
+				<-timer.C
 			}
 
-		case <-s.ctx.Done(): 
+		case <-s.ctx.Done():
 			if !timer.Stop() {
 				<-timer.C
 			}
@@ -144,7 +143,7 @@ func (s *Scheduler) AddTask(task models.ScheduledBlogData) error {
 	select {
 	// Send a signal to the agent informing about the newly added task
 	case s.newTaskCh <- struct{}{}:
-	default: 
+	default:
 	}
 	return nil
 }
@@ -152,7 +151,7 @@ func (s *Scheduler) AddTask(task models.ScheduledBlogData) error {
 // func (s * Scheduler) DeleteTask( task models.ScheduledBlogData) error {
 // 	s.mu.Lock()
 // 	defer s.mu.Unlock()
-	
+
 // 	err := repo.DeleteScheduledTask(task)
 // 	if err != nil {
 // 		return err

@@ -47,7 +47,7 @@ func DeleteScheduledTask(task models.ScheduledBlogData) error {
 
 	// Delete based on both user_id and blog.id  extra safety!
 	_, err := scheduledItemsCollection.DeleteOne(ctx, bson.M{
-		"user_id": task.UserID, 
+		"user_id": task.UserID,
 		"blog.id": task.ScheduledBlog.Id,
 	})
 	if err != nil {
