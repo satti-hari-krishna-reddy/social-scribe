@@ -72,8 +72,8 @@ type SharedBlog struct {
 
 type ScheduledBlog struct {
 	Blog
-	Platforms     []string `json:"platforms" bson:"platforms"`
-	ScheduledTime string   `json:"scheduled_time" bson:"scheduled_time"`
+	Platforms     []string  `json:"platforms" bson:"platforms"`
+	ScheduledTime time.Time `json:"scheduled_time" bson:"scheduled_time"`
 }
 
 type GraphQLQuery struct {
@@ -162,7 +162,7 @@ func (sb *ScheduledBlog) Validate() error {
 		return fmt.Errorf("at least one platform is required")
 	}
 
-	scheduledTime, err := time.Parse(time.RFC3339, sb.ScheduledTime)
+	scheduledTime, err := time.Parse(time.RFC3339, sb.ScheduledTime.Format(time.RFC3339))
 	if err != nil {
 		return fmt.Errorf("invalid scheduled_time format, expected YYYY-MM-DD HH:mm")
 	}
