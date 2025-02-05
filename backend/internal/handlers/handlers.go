@@ -428,13 +428,13 @@ func ScheduleUserBlogHandler(resp http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if len(blogData.ScheduledBlog.ScheduledTime) == 0 {
+	if blogData.ScheduledBlog.ScheduledTime.IsZero() {
 		resp.WriteHeader(http.StatusBadRequest)
 		resp.Write([]byte(`{"success" : false, "reason" : "scheduled time is missing"}`))
 		return
 	}
 
-	_, err = time.Parse(time.RFC3339, blogData.ScheduledBlog.ScheduledTime)
+	_, err = time.Parse(time.RFC3339, blogData.ScheduledBlog.ScheduledTime.Format(time.RFC3339))
 	if err != nil {
 		resp.WriteHeader(http.StatusBadRequest)
 		resp.Write([]byte(`{"success" : false, "reason" : "invalid scheduled time format, must be RFC3339"}`))
