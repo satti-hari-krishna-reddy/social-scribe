@@ -17,6 +17,7 @@ import (
 	// "os/user"
 	"social-scribe/backend/internal/models"
 	repo "social-scribe/backend/internal/repositories"
+	"social-scribe/backend/internal/scheduler"
 	"strings"
 	"time"
 
@@ -54,6 +55,12 @@ func init() {
 		Endpoint:     linkedin.Endpoint,
 	}
 
+}
+
+var taskScheduler *scheduler.Scheduler
+
+func InitScheduler(s *scheduler.Scheduler) {
+	taskScheduler = s
 }
 
 func SignupUserHandler(resp http.ResponseWriter, req *http.Request) {
@@ -1278,6 +1285,33 @@ func ShareBlogHandler(w http.ResponseWriter, req *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"success": true}`))
+}
+
+func ScheduleBlogHandler(w http.ResponseWriter, r *http.Request) {
+	var blogData models.ScheduledBlogData
+	err := json.NewDecoder(r.Body).Decode(&blogData)
+	if err != nil {
+		http.Error(w, "Failed to parse JSON", http.StatusBadRequest)
+		return
+	}
+	err = blogData.ScheduledBlog.Validate()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	err = repo.StoreScheduledTask(blogData)
+	if err != nil {
+		http.Error(w, "Failed to store scheduled task", http.StatusInternalServerError)
+		return
+	}
+	err = taskScheduler.AddTask(blogData)
+	if err != nil {
+		log.Printf("[ERROR] Failed to schedule task: %v", err)
+	}
+	log.Println("[INFO] Task successfully scheduled!")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"success": true}`))
+
 }
 
 // func VerifyHashnodeHandler(w http.ResponseWriter, r *http.Request) {
