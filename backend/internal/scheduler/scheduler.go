@@ -76,6 +76,9 @@ func (s *Scheduler) runAgent() {
 
 		nextTask := (*s.heap)[0]
 		timeUntil := time.Until(nextTask.ScheduledBlog.ScheduledTime)
+		if timeUntil <= 0 {
+			timeUntil = 1 * time.Millisecond
+		}
 		s.mu.Unlock()
 
 		if timer == nil {
@@ -109,9 +112,8 @@ func (s *Scheduler) runAgent() {
 func (s *Scheduler) worker(task models.ScheduledBlogData) {
 
 	// mock function for now
+
 	log.Printf("Executing task: %v", task)
-	work := heap.Pop(s.heap).(models.ScheduledBlogData)
-	log.Printf(" the time of the scheduled blog is: %v", work.ScheduledBlog.ScheduledTime)
 	log.Printf("Task executed: %v", task.ScheduledBlog.ScheduledTime)
 }
 
@@ -124,7 +126,8 @@ func (s *Scheduler) loadTasks() error {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.heap = (*TaskHeap)(&tasks)
+	s.heap = &TaskHeap{}
+	*s.heap = append(*s.heap, tasks...)
 	heap.Init(s.heap)
 	log.Printf("[INFO] Loaded %d tasks successfully into heap", len(tasks))
 	return nil
