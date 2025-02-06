@@ -20,7 +20,7 @@ func RegisterRoutes() *mux.Router {
 	apiV1.HandleFunc("/user/notifications", handlers.GetUserNotificationsHandler).Methods(http.MethodGet, http.MethodOptions)
 	apiV1.HandleFunc("/user/notifications/clear", handlers.ClearUserNotificationsHandler).Methods(http.MethodDelete, http.MethodOptions)
 
-	apiV1.HandleFunc("/blogs/schedule", handlers.ScheduleUserBlogHandler).Methods(http.MethodPost, http.MethodOptions)
+	apiV1.HandleFunc("/blogs/schedule", handlers.ScheduleBlogHandler).Methods(http.MethodPost, http.MethodOptions)
 	apiV1.HandleFunc("/blogs/schedule/delete", handlers.GetUserSharedBlogsHandler).Methods(http.MethodDelete, http.MethodOptions)
 	apiV1.HandleFunc("/blogs/user/share", handlers.ShareBlogHandler).Methods(http.MethodPost, http.MethodOptions)
 	apiV1.HandleFunc("/blogs/user/shared-blogs", handlers.GetUserSharedBlogsHandler).Methods(http.MethodGet, http.MethodOptions)
