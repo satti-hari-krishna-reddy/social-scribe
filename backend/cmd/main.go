@@ -5,10 +5,12 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"social-scribe/backend/api/v1"
 	"social-scribe/backend/internal/handlers"
 	repo "social-scribe/backend/internal/repositories"
 	"social-scribe/backend/internal/scheduler"
+	"syscall"
 
 	"github.com/rs/cors"
 )
@@ -29,10 +31,21 @@ func main() {
 	if err != nil {
 		hostname = "MISSING"
 	}
+
 	taskScheduler := scheduler.NewScheduler()
 	handlers.InitScheduler(taskScheduler)
-	corsHandler := setupCors()
+	defer taskScheduler.Stop()
 
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-stop
+		log.Println("[INFO] Shutting down gracefully...")
+		taskScheduler.Stop()
+		os.Exit(0)
+	}()
+
+	corsHandler := setupCors()
 	port := os.Getenv("BACKEND_PORT")
 	if port == "" {
 		log.Printf("[DEBUG] Running on %s:9696", hostname)
