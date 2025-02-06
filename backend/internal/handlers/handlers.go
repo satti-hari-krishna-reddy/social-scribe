@@ -1299,14 +1299,10 @@ func ScheduleBlogHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	err = repo.StoreScheduledTask(blogData)
+	err = taskScheduler.AddTask(blogData)
 	if err != nil {
 		http.Error(w, "Failed to store scheduled task", http.StatusInternalServerError)
 		return
-	}
-	err = taskScheduler.AddTask(blogData)
-	if err != nil {
-		log.Printf("[ERROR] Failed to schedule task: %v", err)
 	}
 	log.Println("[INFO] Task successfully scheduled!")
 	w.WriteHeader(http.StatusOK)
