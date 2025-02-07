@@ -11,7 +11,7 @@ import (
 	"social-scribe/backend/internal/models"
 )
 
-func SetCache(key string, value interface{}, expiration time.Duration) (string, error) {
+func SetCache(key string, value interface{}, expiration time.Duration) error {
 	ctx := context.TODO()
 
 	item := models.CacheItem{
@@ -32,10 +32,10 @@ func SetCache(key string, value interface{}, expiration time.Duration) (string, 
 
 	if err != nil {
 		log.Printf("[ERROR] Error setting cache for key %s: %v", key, err)
-		return "", err
+		return  err
 	}
 
-	return key, nil
+	return nil
 }
 
 func GetCache(key string) (interface{}, bool) {
@@ -58,7 +58,7 @@ func GetCache(key string) (interface{}, bool) {
 		return nil, false
 	}
 
-	return result.Value, true
+	return result, true
 }
 
 func DeleteCache(key string) error {
