@@ -24,8 +24,8 @@ import (
 	"github.com/dghubble/oauth1"
 	"github.com/dghubble/oauth1/twitter"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 
-	// "github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
 	"golang.org/x/crypto/bcrypt"
@@ -65,7 +65,7 @@ func InitScheduler(s *scheduler.Scheduler) {
 
 func SignupUserHandler(resp http.ResponseWriter, req *http.Request) {
 	if req.Body == nil {
-		http.Error(resp, `{"error": "Failed to parse credintials: body is empty"}`, http.StatusBadRequest)
+		http.Error(resp, `{"error": "Failed to parse credentials: body is empty"}`, http.StatusBadRequest)
 		return
 	}
 	user := models.User{}
@@ -85,7 +85,7 @@ func SignupUserHandler(resp http.ResponseWriter, req *http.Request) {
 		return
 	}
 	if len(user.PassWord) < 8 || len(user.PassWord) > 128 {
-		http.Error(resp, `{"error": "The password should contain a minimum of 8 and maximun of 128 characters"}`, http.StatusBadRequest)
+		http.Error(resp, `{"error": "The password should contain a minimum of 8 and maximum of 128 characters"}`, http.StatusBadRequest)
 		return
 	}
 
@@ -106,41 +106,42 @@ func SignupUserHandler(resp http.ResponseWriter, req *http.Request) {
 		log.Printf("[ERROR] Error hashing password for user '%s': %v", user.UserName, err)
 		return
 	}
+
 	user.Verified = false
 	user.LinkedinVerified = false
 	user.EmailVerified = false
 	user.HashnodeVerified = false
 	user.XVerified = false
 	user.PassWord = string(hashedPassword)
+
 	userId, err := repo.InsertUser(user)
 	if err != nil {
 		log.Printf("[ERROR] Unable to create user %v: %v", user.UserName, err)
 		http.Error(resp, `{"error": "Failed to create user"}`, http.StatusInternalServerError)
 		return
 	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"user_id": userId,
-		"email":   user.UserName,
-		"exp":     time.Now().Add(24 * time.Hour).Unix(), // 1-day expiration
-	})
-	tokenString, err := token.SignedString([]byte("your-secret-key"))
+
+	sessionToken := uuid.New().String()
+	expiration := time.Now().Add(24 * time.Hour)
+	err = repo.SetCache(sessionToken, userId, 24*time.Hour)
 	if err != nil {
-		resp.WriteHeader(http.StatusInternalServerError)
-		resp.Write([]byte(`{"success": false, "reason": "Failed to generate token"}`))
+		http.Error(resp, `{"error": "Failed to create session"}`, http.StatusInternalServerError)
 		return
 	}
+
 	http.SetCookie(resp, &http.Cookie{
-		Name:     "auth_token",
-		Value:    tokenString,
+		Name:     "session_token",
+		Value:    sessionToken,
 		HttpOnly: true,
 		Path:     "/",
 		Secure:   false,
+		Expires:  expiration,
 	})
 
 	user.PassWord = ""
 	responseJson, err := json.Marshal(user)
 	if err != nil {
-		resp.WriteHeader(401)
+		resp.WriteHeader(http.StatusInternalServerError)
 		resp.Write([]byte(`{"success": false, "reason": "Failed unpacking user"}`))
 		return
 	}
@@ -189,23 +190,21 @@ func LoginUserHandler(resp http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"user_id": user.Id,
-		"email":   user.UserName,
-		"exp":     time.Now().Add(24 * time.Hour).Unix(), // 1-day expiration
-	})
-	tokenString, err := token.SignedString([]byte("your-secret-key"))
+	sessionToken := uuid.New().String()
+	expiration := time.Now().Add(24 * time.Hour)
+	err = repo.SetCache(sessionToken, user.Id, 24*time.Hour)
 	if err != nil {
-		resp.WriteHeader(http.StatusInternalServerError)
-		resp.Write([]byte(`{"success": false, "reason": "Failed to generate token"}`))
+		http.Error(resp, `{"error": "Failed to create session"}`, http.StatusInternalServerError)
 		return
 	}
+
 	http.SetCookie(resp, &http.Cookie{
-		Name:     "auth_token",
-		Value:    tokenString,
+		Name:     "session_token",
+		Value:    sessionToken,
 		HttpOnly: true,
 		Path:     "/",
 		Secure:   false,
+		Expires:  expiration,
 	})
 
 	user.PassWord = ""
@@ -259,9 +258,10 @@ func GetUserInfoHandler(resp http.ResponseWriter, req *http.Request) {
 		return
 	}
 	user.PassWord = ""
-	// user.HashnodePAT = ""
-	// user.LinkedInOauthKey = ""
-	// user.XoauthKey = ""
+	user.HashnodePAT = ""
+	user.LinkedInOauthKey = ""
+	user.XOAuthToken = ""
+	user.XOAuthSecret = ""
 	responseJson, err := json.Marshal(user)
 	if err != nil {
 		resp.WriteHeader(401)
@@ -728,14 +728,14 @@ func ConnectLinkedInHandler(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[ERROR] User with id: %s not found", userId)
 		return
 	}
-	state := userId
-	user.LinkedInOauthKey = state
-	err = repo.UpdateUser(userId, user)
+	state := uuid.New().String()
+	err = repo.SetCache(state, userId, 10*time.Minute)
 	if err != nil {
-		log.Printf("[ERROR] Failed to update user with id: %s and error is %s", userId, err)
+		log.Printf("[ERROR] Failed to store state in cache: %v", err)
+		http.Error(w, "Failed to store state in cache", http.StatusInternalServerError)
 		return
 	}
-	// sending userid as state can be a security risk, this needed to be fixed in the future : )
+
 	http.SetCookie(w, &http.Cookie{
 		Name:     "oauth_state",
 		Value:    state,
@@ -756,8 +756,14 @@ func LinkedCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid state parameter", http.StatusForbidden)
 		return
 	}
-	userId := stateCookie.Value
-	user, err := repo.GetUserById(userId)
+	userId, exists := repo.GetCache(stateCookie.Value)
+	if !exists {
+		log.Printf("[ERROR] Invalid state parameter")
+		http.Error(w, "Invalid state parameter", http.StatusForbidden)
+		return
+	}
+
+	user, err := repo.GetUserById(userId.(string))
 	if err != nil {
 		log.Printf("[ERROR] Failed to get user for the id: %s and error is %s", userId, err)
 		return
@@ -792,7 +798,7 @@ func LinkedCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		user.Verified = false
 	}
-	err = repo.UpdateUser(userId, user)
+	err = repo.UpdateUser(userId.(string), user)
 	if err != nil {
 		log.Printf("[ERROR] Failed to update user with id: %s and error is %s", userId, err)
 		return
@@ -810,9 +816,8 @@ func linkedPostHandler(message, accessToken string) error {
 		return fmt.Errorf("failed to fetch user ID: %v", err)
 	}
 
-	// Construct the post data
 	postData := map[string]interface{}{
-		"author":         userURN, // Use the fetched user ID
+		"author":         userURN, 
 		"lifecycleState": "PUBLISHED",
 		"specificContent": map[string]interface{}{
 			"com.linkedin.ugc.ShareContent": map[string]interface{}{
@@ -832,7 +837,6 @@ func linkedPostHandler(message, accessToken string) error {
 		return fmt.Errorf("failed to marshal post data: %v", err)
 	}
 
-	// Send the POST request
 	req, err := http.NewRequest("POST", "https://api.linkedin.com/v2/ugcPosts", bytes.NewBuffer(postBody))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %v", err)
@@ -891,29 +895,26 @@ func getUserURN(accessToken string) (string, error) {
 }
 
 func ValidateLogin(req *http.Request) (string, error) {
-	cookie, err := req.Cookie("auth_token")
+	cookie, err := req.Cookie("session_token")
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("missing session token")
 	}
-	token, err := jwt.Parse(cookie.Value, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-		}
-		return []byte("your-secret-key"), nil
-	})
 
-	if err != nil {
-		return "", err
+	sessionData, exists := repo.GetCache(cookie.Value)
+	if !exists {
+		return "", fmt.Errorf("invalid or expired session")
 	}
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok || !token.Valid {
-		return "", fmt.Errorf("invalid token")
-	}
-	userId, ok := claims["user_id"].(string)
+
+	session, ok := sessionData.(models.CacheItem)
 	if !ok {
-		return "", fmt.Errorf("invalid user id")
+		return "", fmt.Errorf("invalid session data format")
 	}
-	return userId, nil
+
+	if session.ExpiresAt.Before(time.Now()) {
+		return "", fmt.Errorf("session expired")
+	}
+
+	return session.Value.(string), nil
 }
 
 func VerifyHashnodeHandler(w http.ResponseWriter, r *http.Request) {
