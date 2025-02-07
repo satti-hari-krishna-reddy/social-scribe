@@ -32,7 +32,7 @@ func SetCache(key string, value interface{}, expiration time.Duration) error {
 
 	if err != nil {
 		log.Printf("[ERROR] Error setting cache for key %s: %v", key, err)
-		return  err
+		return err
 	}
 
 	return nil

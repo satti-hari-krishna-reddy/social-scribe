@@ -817,7 +817,7 @@ func linkedPostHandler(message, accessToken string) error {
 	}
 
 	postData := map[string]interface{}{
-		"author":         userURN, 
+		"author":         userURN,
 		"lifecycleState": "PUBLISHED",
 		"specificContent": map[string]interface{}{
 			"com.linkedin.ugc.ShareContent": map[string]interface{}{
