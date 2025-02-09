@@ -6,6 +6,7 @@ import (
 	"log"
 	"social-scribe/backend/internal/models"
 	repo "social-scribe/backend/internal/repositories"
+	"social-scribe/backend/internal/services"
 	"sync"
 	"time"
 )
@@ -58,51 +59,95 @@ func NewScheduler() *Scheduler {
 }
 
 func (s *Scheduler) runAgent() {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[ERROR] Agent panicked: %v", r)
+			s.Stop()
+		}
+	}()
+
+	log.Println("[INFO] Scheduler agent started")
+
 	var timer *time.Timer
 
 	for {
-		// Check the if heap is empty and if so, wait for new tasks
 		s.mu.Lock()
 		if s.heap.Len() == 0 {
 			log.Println("[INFO] No tasks in the heap, waiting for new tasks")
 			s.mu.Unlock()
+
 			select {
 			case <-s.newTaskCh:
+				log.Println("[INFO] New task added, rechecking heap")
 				continue
 			case <-s.ctx.Done():
+				log.Println("[INFO] Scheduler stopped")
 				return
 			}
 		}
 
+		// Peek at the next task
 		nextTask := (*s.heap)[0]
-		timeUntil := time.Until(nextTask.ScheduledBlog.ScheduledTime)
+		scheduledTimeUTC := nextTask.ScheduledBlog.ScheduledTime.UTC()
+		timeUntil := time.Until(scheduledTimeUTC)
+
+		// If the task is overdue or due immediately, force execution
 		if timeUntil <= 0 {
 			timeUntil = 1 * time.Millisecond
 		}
+
 		s.mu.Unlock()
 
+		if timeUntil == 1*time.Millisecond {
+			s.mu.Lock()
+			if s.heap.Len() > 0 {
+				task := heap.Pop(s.heap).(models.ScheduledBlogData)
+				s.mu.Unlock()
+				go s.worker(task)
+			} else {
+				s.mu.Unlock()
+			}
+			// continue to check for more tasks that are due immediately
+			continue
+		}
+
+		// Otherwise, set up or reset the timer for future tasks.
 		if timer == nil {
 			timer = time.NewTimer(timeUntil)
 		} else {
-			log.Printf("[INFO] Resetting timer from %v to %v", timer, timeUntil)
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			log.Printf("[INFO] Resetting timer to %v", timeUntil)
 			timer.Reset(timeUntil)
 		}
 
 		select {
 		case <-timer.C:
 			s.mu.Lock()
-			heap.Pop(s.heap)
-			s.mu.Unlock()
-			go s.worker(nextTask)
-
-		case <-s.newTaskCh:
-			if !timer.Stop() {
-				<-timer.C
+			if s.heap.Len() > 0 {
+				task := heap.Pop(s.heap).(models.ScheduledBlogData)
+				s.mu.Unlock()
+				go s.worker(task)
+			} else {
+				s.mu.Unlock()
 			}
 
+		case <-s.newTaskCh:
+			// If a new task is added, recheck the heap
+			continue
+
 		case <-s.ctx.Done():
-			if !timer.Stop() {
-				<-timer.C
+			if timer != nil {
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
 			}
 			return
 		}
@@ -111,10 +156,53 @@ func (s *Scheduler) runAgent() {
 
 func (s *Scheduler) worker(task models.ScheduledBlogData) {
 
-	// mock function for now
+	log.Printf("[INFO] Worker executing task for user %v with blog %v, for platforms %v", 
+	task.UserID, task.ScheduledBlog.Blog.Id, task.ScheduledBlog.Platforms)
 
-	log.Printf("Executing task: %v", task)
-	log.Printf("Task executed: %v", task.ScheduledBlog.ScheduledTime)
+	user, err := repo.GetUserById(task.UserID)
+	if err != nil || user == nil {
+		log.Printf("[ERROR] Error getting user or user not found: %v", task.UserID)
+		if delErr := repo.DeleteScheduledTask(task); delErr != nil {
+			log.Printf("[ERROR] Error deleting scheduled task: %v", delErr)
+		}
+		return
+	}
+
+	blogId := task.ScheduledBlog.Blog.Id
+	platforms := task.ScheduledBlog.Platforms
+
+	processErr := services.ProcessSharedBlog(user, blogId, platforms)
+	if processErr != nil {
+		log.Printf("[ERROR] Error processing shared blog for blog id %s and user id %s: %v", blogId, task.UserID, processErr)
+	}
+
+	delErr := repo.DeleteScheduledTask(task)
+	if delErr != nil {
+		log.Printf("[ERROR] Error deleting scheduled task: %v", delErr)
+	}
+
+	removed := false
+	for i, blog := range user.ScheduledBlogs {
+		if blog.Id == blogId {
+			user.ScheduledBlogs = append(user.ScheduledBlogs[:i], user.ScheduledBlogs[i+1:]...)
+			removed = true
+			break
+		}
+	}
+	if !removed {
+		log.Printf("[WARN] Blog with id %s not found in user's scheduled blogs", blogId)
+	}
+
+	updErr := repo.UpdateUser(task.UserID, user)
+	if updErr != nil {
+		log.Printf("[ERROR] Error updating user: %v", updErr)
+	}
+
+	if processErr != nil {
+		log.Printf("[INFO] Task executed with errors for blog with ID %s and user ID %s, error: %v", blogId, task.UserID, processErr)
+	} else {
+		log.Printf("[INFO] Task executed successfully for blog with ID %s and user ID %s at %v", blogId, task.UserID, task.ScheduledBlog.ScheduledTime)
+	}
 }
 
 func (s *Scheduler) loadTasks() error {
@@ -151,14 +239,6 @@ func (s *Scheduler) AddTask(task models.ScheduledBlogData) error {
 	return nil
 }
 
-// func (s * Scheduler) DeleteTask( task models.ScheduledBlogData) error {
-// 	s.mu.Lock()
-// 	defer s.mu.Unlock()
-
-// 	err := repo.DeleteScheduledTask(task)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	heap.Pop(s.heap)
-// 	return nil
-// }
+func (s *Scheduler) Stop() {
+	s.cancel()
+}
