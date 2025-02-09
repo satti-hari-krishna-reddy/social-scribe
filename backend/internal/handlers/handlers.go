@@ -4,27 +4,23 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
-
-	// "go/token"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 
-	// "os/user"
 	"social-scribe/backend/internal/models"
 	repo "social-scribe/backend/internal/repositories"
 	"social-scribe/backend/internal/scheduler"
+	"social-scribe/backend/internal/services"
 	"strings"
 	"time"
 
 	"github.com/dghubble/oauth1"
 	"github.com/dghubble/oauth1/twitter"
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
@@ -54,6 +50,8 @@ func init() {
 		Scopes:       []string{"openid", "profile", "email", "w_member_social"},
 		Endpoint:     linkedin.Endpoint,
 	}
+
+	services.InitTwitterConfig(twitterConfig)
 
 }
 
@@ -221,30 +219,9 @@ func LoginUserHandler(resp http.ResponseWriter, req *http.Request) {
 }
 
 func GetUserInfoHandler(resp http.ResponseWriter, req *http.Request) {
-	cookie, err := req.Cookie("auth_token")
+	userId, err := ValidateLogin(req)
 	if err != nil {
-		http.Error(resp, `{"error": "Unauthorized"}`, http.StatusUnauthorized)
-		return
-	}
-	token, err := jwt.Parse(cookie.Value, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-		}
-		return []byte("your-secret-key"), nil
-	})
-
-	if err != nil {
-		http.Error(resp, `{"error": "Unauthorized"}`, http.StatusUnauthorized)
-		return
-	}
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok || !token.Valid {
-		http.Error(resp, `{"error": "Unauthorized"}`, http.StatusUnauthorized)
-		return
-	}
-	userId, ok := claims["user_id"].(string)
-	if !ok {
-		http.Error(resp, `{"error": "Unauthorized"}`, http.StatusUnauthorized)
+		http.Error(resp, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 	user, err := repo.GetUserById(userId)
@@ -541,7 +518,7 @@ func GetUserBlogsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		headers := map[string]string{"Content-Type": "application/json"}
-		gqlResponse, err := makePostRequest(endpoint, queryBytes, headers)
+		gqlResponse, err := services.MakePostRequest(endpoint, queryBytes, headers)
 		if err != nil {
 			log.Printf("[ERROR] Failed to make request: %v", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -574,30 +551,30 @@ func GetUserBlogsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(fmt.Sprintf(`{"success": true, "blogs": %s}`, string(responseBytes))))
 }
 
-func makePostRequest(url string, body []byte, headers map[string]string) ([]byte, error) {
-	request, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create HTTP request: %v", err)
-	}
+// func makePostRequest(url string, body []byte, headers map[string]string) ([]byte, error) {
+// 	request, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
+// 	if err != nil {
+// 		return nil, fmt.Errorf("failed to create HTTP request: %v", err)
+// 	}
 
-	for key, value := range headers {
-		request.Header.Set(key, value)
-	}
+// 	for key, value := range headers {
+// 		request.Header.Set(key, value)
+// 	}
 
-	client := &http.Client{}
-	response, err := client.Do(request)
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute HTTP request: %v", err)
-	}
-	defer response.Body.Close()
+// 	client := &http.Client{}
+// 	response, err := client.Do(request)
+// 	if err != nil {
+// 		return nil, fmt.Errorf("failed to execute HTTP request: %v", err)
+// 	}
+// 	defer response.Body.Close()
 
-	if response.StatusCode != http.StatusOK {
-		body, _ := ioutil.ReadAll(response.Body)
-		return nil, fmt.Errorf("GraphQL query failed with status code %d: %s", response.StatusCode, string(body))
-	}
+// 	if response.StatusCode != http.StatusOK {
+// 		body, _ := ioutil.ReadAll(response.Body)
+// 		return nil, fmt.Errorf("GraphQL query failed with status code %d: %s", response.StatusCode, string(body))
+// 	}
 
-	return ioutil.ReadAll(response.Body)
-}
+// 	return ioutil.ReadAll(response.Body)
+// }
 
 func ConnectXhandler(w http.ResponseWriter, r *http.Request) {
 	userId, err := ValidateLogin(r)
@@ -693,25 +670,25 @@ func XcallbackHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "http://localhost:5173/verification", http.StatusSeeOther)
 }
 
-func PostTweetHandler(message string, blogId string, userToken *oauth1.Token) error {
+// func PostTweetHandler(message string, blogId string, userToken *oauth1.Token) error {
 
-	client := twitterConfig.Client(oauth1.NoContext, userToken)
+// 	client := twitterConfig.Client(oauth1.NoContext, userToken)
 
-	tweetURL := "https://api.twitter.com/1.1/statuses/update.json"
-	resp, err := client.PostForm(tweetURL, map[string][]string{"status": {message}})
-	if err != nil {
-		log.Printf("[ERROR] Failed to post tweet for the blog id : %s and the error is %s", blogId, err)
-		return err
-	}
-	defer resp.Body.Close()
+// 	tweetURL := "https://api.twitter.com/1.1/statuses/update.json"
+// 	resp, err := client.PostForm(tweetURL, map[string][]string{"status": {message}})
+// 	if err != nil {
+// 		log.Printf("[ERROR] Failed to post tweet for the blog id : %s and the error is %s", blogId, err)
+// 		return err
+// 	}
+// 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return errors.New("Failed to post tweet: " + resp.Status)
-	}
+// 	if resp.StatusCode != http.StatusOK {
+// 		return errors.New("Failed to post tweet: " + resp.Status)
+// 	}
 
-	log.Printf("[INFO] Blog with ID %s shared on X(twitter) Successfully", blogId)
-	return nil
-}
+// 	log.Printf("[INFO] Blog with ID %s shared on X(twitter) Successfully", blogId)
+// 	return nil
+// }
 
 func ConnectLinkedInHandler(w http.ResponseWriter, r *http.Request) {
 	userId, err := ValidateLogin(r)
@@ -762,19 +739,20 @@ func LinkedCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid state parameter", http.StatusForbidden)
 		return
 	}
+	err = repo.DeleteCache(stateCookie.Value)
+	if err != nil {
+		log.Printf("[WARN] Failed to delete state from cache for the user id: %s and error is %s", userId, err)
+	}
 
 	user, err := repo.GetUserById(userId.(string))
 	if err != nil {
 		log.Printf("[ERROR] Failed to get user for the id: %s and error is %s", userId, err)
+		http.Error(w, "User not found", http.StatusNotFound)
 		return
 	}
 	if user == nil {
 		log.Printf("[ERROR] User with id: %s not found", userId)
 		http.Error(w, "User not found", http.StatusNotFound)
-		return
-	}
-	if user.LinkedInOauthKey != queryState {
-		http.Error(w, "Invalid state parameter", http.StatusForbidden)
 		return
 	}
 
@@ -801,6 +779,7 @@ func LinkedCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	err = repo.UpdateUser(userId.(string), user)
 	if err != nil {
 		log.Printf("[ERROR] Failed to update user with id: %s and error is %s", userId, err)
+		http.Error(w, "Failed to update user", http.StatusInternalServerError)
 		return
 	}
 	log.Printf("[INFO] User with ID %s connected to LinkedIn Successfully", user.Id)
@@ -809,90 +788,90 @@ func LinkedCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "http://localhost:5173/verification", http.StatusSeeOther)
 }
 
-func linkedPostHandler(message, accessToken string) error {
-	userURN, err := getUserURN(accessToken)
-	log.Printf("[INFO] here is the user URN %v", userURN)
-	if err != nil {
-		return fmt.Errorf("failed to fetch user ID: %v", err)
-	}
+// func linkedPostHandler(message, accessToken string) error {
+// 	userURN, err := getUserURN(accessToken)
+// 	log.Printf("[INFO] here is the user URN %v", userURN)
+// 	if err != nil {
+// 		return fmt.Errorf("failed to fetch user ID: %v", err)
+// 	}
 
-	postData := map[string]interface{}{
-		"author":         userURN,
-		"lifecycleState": "PUBLISHED",
-		"specificContent": map[string]interface{}{
-			"com.linkedin.ugc.ShareContent": map[string]interface{}{
-				"shareCommentary": map[string]interface{}{
-					"text": message,
-				},
-				"shareMediaCategory": "NONE",
-			},
-		},
-		"visibility": map[string]interface{}{
-			"com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC",
-		},
-	}
+// 	postData := map[string]interface{}{
+// 		"author":         userURN,
+// 		"lifecycleState": "PUBLISHED",
+// 		"specificContent": map[string]interface{}{
+// 			"com.linkedin.ugc.ShareContent": map[string]interface{}{
+// 				"shareCommentary": map[string]interface{}{
+// 					"text": message,
+// 				},
+// 				"shareMediaCategory": "NONE",
+// 			},
+// 		},
+// 		"visibility": map[string]interface{}{
+// 			"com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC",
+// 		},
+// 	}
 
-	postBody, err := json.Marshal(postData)
-	if err != nil {
-		return fmt.Errorf("failed to marshal post data: %v", err)
-	}
+// 	postBody, err := json.Marshal(postData)
+// 	if err != nil {
+// 		return fmt.Errorf("failed to marshal post data: %v", err)
+// 	}
 
-	req, err := http.NewRequest("POST", "https://api.linkedin.com/v2/ugcPosts", bytes.NewBuffer(postBody))
-	if err != nil {
-		return fmt.Errorf("failed to create request: %v", err)
-	}
+// 	req, err := http.NewRequest("POST", "https://api.linkedin.com/v2/ugcPosts", bytes.NewBuffer(postBody))
+// 	if err != nil {
+// 		return fmt.Errorf("failed to create request: %v", err)
+// 	}
 
-	req.Header.Set("Authorization", "Bearer "+accessToken)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Restli-Protocol-Version", "2.0.0")
+// 	req.Header.Set("Authorization", "Bearer "+accessToken)
+// 	req.Header.Set("Content-Type", "application/json")
+// 	req.Header.Set("X-Restli-Protocol-Version", "2.0.0")
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to send post request: %v", err)
-	}
-	defer resp.Body.Close()
+// 	client := &http.Client{}
+// 	resp, err := client.Do(req)
+// 	if err != nil {
+// 		return fmt.Errorf("failed to send post request: %v", err)
+// 	}
+// 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusCreated {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to create post, status code: %d, response: %s", resp.StatusCode, body)
-	}
+// 	if resp.StatusCode != http.StatusCreated {
+// 		body, _ := io.ReadAll(resp.Body)
+// 		return fmt.Errorf("failed to create post, status code: %d, response: %s", resp.StatusCode, body)
+// 	}
 
-	fmt.Println("Post successfully created!")
-	return nil
-}
+// 	fmt.Println("Post successfully created!")
+// 	return nil
+// }
 
-func getUserURN(accessToken string) (string, error) {
-	req, err := http.NewRequest("GET", "https://api.linkedin.com/v2/userinfo", nil)
-	if err != nil {
-		return "", fmt.Errorf("failed to create request: %v", err)
-	}
-	req.Header.Set("Authorization", "Bearer "+accessToken)
+// func getUserURN(accessToken string) (string, error) {
+// 	req, err := http.NewRequest("GET", "https://api.linkedin.com/v2/userinfo", nil)
+// 	if err != nil {
+// 		return "", fmt.Errorf("failed to create request: %v", err)
+// 	}
+// 	req.Header.Set("Authorization", "Bearer "+accessToken)
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("failed to send request: %v", err)
-	}
-	defer resp.Body.Close()
+// 	client := &http.Client{}
+// 	resp, err := client.Do(req)
+// 	if err != nil {
+// 		return "", fmt.Errorf("failed to send request: %v", err)
+// 	}
+// 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("failed to get user ID, status code: %d, response: %s", resp.StatusCode, body)
-	}
+// 	if resp.StatusCode != http.StatusOK {
+// 		body, _ := io.ReadAll(resp.Body)
+// 		return "", fmt.Errorf("failed to get user ID, status code: %d, response: %s", resp.StatusCode, body)
+// 	}
 
-	var data struct {
-		ID string `json:"sub"`
-	}
+// 	var data struct {
+// 		ID string `json:"sub"`
+// 	}
 
-	log.Printf("[INFO] here is the body %v", resp.Body)
-	err = json.NewDecoder(resp.Body).Decode(&data)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse response: %v", err)
-	}
-	log.Printf("[INFO] here is the data %v", data)
-	return "urn:li:person:" + data.ID, nil
-}
+// 	log.Printf("[INFO] here is the body %v", resp.Body)
+// 	err = json.NewDecoder(resp.Body).Decode(&data)
+// 	if err != nil {
+// 		return "", fmt.Errorf("failed to parse response: %v", err)
+// 	}
+// 	log.Printf("[INFO] here is the data %v", data)
+// 	return "urn:li:person:" + data.ID, nil
+// }
 
 func ValidateLogin(req *http.Request) (string, error) {
 	cookie, err := req.Cookie("session_token")
@@ -914,7 +893,12 @@ func ValidateLogin(req *http.Request) (string, error) {
 		return "", fmt.Errorf("session expired")
 	}
 
-	return session.Value.(string), nil
+	// Since session.Value is actually a primitive.ObjectID, convert it to string.
+	oid, ok := session.Value.(primitive.ObjectID)
+	if !ok {
+		return "", fmt.Errorf("invalid session user id format")
+	}
+	return oid.Hex(), nil
 }
 
 func VerifyHashnodeHandler(w http.ResponseWriter, r *http.Request) {
@@ -1021,66 +1005,272 @@ func VerifyHashnodeHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(`{"success": true}`))
 }
 
-func InvokeAi(prompt string) (string, error) {
-	apiKey := os.Getenv("API_KEY")
-	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=%s", apiKey)
+// func InvokeAi(prompt string) (string, error) {
+// 	apiKey := os.Getenv("API_KEY")
+// 	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=%s", apiKey)
 
-	// Request payload
-	payload := map[string]interface{}{
-		"contents": []map[string]interface{}{
-			{
-				"parts": []map[string]string{
-					{"text": prompt},
-				},
-			},
-		},
-	}
-	requestBody, err := json.Marshal(payload)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal request payload: %v", err)
-	}
+// 	// Request payload
+// 	payload := map[string]interface{}{
+// 		"contents": []map[string]interface{}{
+// 			{
+// 				"parts": []map[string]string{
+// 					{"text": prompt},
+// 				},
+// 			},
+// 		},
+// 	}
+// 	requestBody, err := json.Marshal(payload)
+// 	if err != nil {
+// 		return "", fmt.Errorf("failed to marshal request payload: %v", err)
+// 	}
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(requestBody))
-	if err != nil {
-		return "", fmt.Errorf("failed to create request: %v", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
+// 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(requestBody))
+// 	if err != nil {
+// 		return "", fmt.Errorf("failed to create request: %v", err)
+// 	}
+// 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("request failed: %v", err)
-	}
-	defer resp.Body.Close()
+// 	client := &http.Client{}
+// 	resp, err := client.Do(req)
+// 	if err != nil {
+// 		return "", fmt.Errorf("request failed: %v", err)
+// 	}
+// 	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read response body: %v", err)
-	}
+// 	body, err := ioutil.ReadAll(resp.Body)
+// 	if err != nil {
+// 		return "", fmt.Errorf("failed to read response body: %v", err)
+// 	}
 
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("API error: %s", body)
-	}
+// 	if resp.StatusCode != http.StatusOK {
+// 		return "", fmt.Errorf("API error: %s", body)
+// 	}
 
-	var result struct {
-		Candidates []struct {
-			Content struct {
-				Parts []struct {
-					Text string `json:"text"`
-				} `json:"parts"`
-			} `json:"content"`
-		} `json:"candidates"`
-	}
-	if err := json.Unmarshal(body, &result); err != nil {
-		return "", fmt.Errorf("failed to unmarshal response: %v", err)
-	}
+// 	var result struct {
+// 		Candidates []struct {
+// 			Content struct {
+// 				Parts []struct {
+// 					Text string `json:"text"`
+// 				} `json:"parts"`
+// 			} `json:"content"`
+// 		} `json:"candidates"`
+// 	}
+// 	if err := json.Unmarshal(body, &result); err != nil {
+// 		return "", fmt.Errorf("failed to unmarshal response: %v", err)
+// 	}
 
-	if len(result.Candidates) > 0 && len(result.Candidates[0].Content.Parts) > 0 {
-		return result.Candidates[0].Content.Parts[0].Text, nil
-	}
+// 	if len(result.Candidates) > 0 && len(result.Candidates[0].Content.Parts) > 0 {
+// 		return result.Candidates[0].Content.Parts[0].Text, nil
+// 	}
 
-	return "", fmt.Errorf("no content found in the response")
-}
+// 	return "", fmt.Errorf("no content found in the response")
+// }
+
+// func ShareBlogHandler(w http.ResponseWriter, req *http.Request) {
+// 	userId, err := ValidateLogin(req)
+// 	if err != nil {
+// 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+// 		return
+// 	}
+// 	user, err := repo.GetUserById(userId)
+// 	if err != nil {
+// 		log.Printf("[ERROR] Failed to get user for the id: %s and error is %s", userId, err)
+// 		return
+// 	}
+// 	if user == nil {
+// 		log.Printf("[ERROR] User with id: %s not found", userId)
+// 		return
+// 	}
+// 	if !user.Verified {
+// 		http.Error(w, "User is not verified", http.StatusForbidden)
+// 		return
+// 	}
+
+// 	var requestBody struct {
+// 		Id        string   `json:"id"`
+// 		Platforms []string `json:"platforms"`
+// 	}
+// 	if err := json.NewDecoder(req.Body).Decode(&requestBody); err != nil {
+// 		http.Error(w, "Invalid request body", http.StatusBadRequest)
+// 		return
+// 	}
+
+// 	blogId := requestBody.Id
+// 	if len(blogId) == 0 {
+// 		w.WriteHeader(401)
+// 		w.Write([]byte(`{"success": false, "reason": "missing blog id in the request"}`))
+// 		return
+// 	}
+
+// 	// Validate platforms
+// 	validPlatforms := map[string]bool{
+// 		"twitter":  true,
+// 		"linkedin": true,
+// 	}
+// 	if len(requestBody.Platforms) == 0 {
+// 		http.Error(w, "At least one platform must be specified", http.StatusBadRequest)
+// 		return
+// 	}
+// 	for _, platform := range requestBody.Platforms {
+// 		if !validPlatforms[platform] {
+// 			http.Error(w, "Invalid platform specified", http.StatusBadRequest)
+// 			return
+// 		}
+// 	}
+// 	query := models.GraphQLQuery{
+// 		Query: `query Post($id: ID!) {
+//             post(id: $id) {
+//                 id
+//                 url
+//                 coverImage {
+//                     url
+//                 }
+//                 author {
+//                     name
+//                 }
+//                 readTimeInMinutes
+//                 title
+//                 subtitle
+//                 brief
+//                 content {
+//                     text
+//                 }
+//             }
+//         }`,
+// 		Variables: map[string]interface{}{
+// 			"id": blogId,
+// 		},
+// 	}
+
+// 	endpoint := "https://gql.hashnode.com"
+// 	queryBytes, err := json.Marshal(query)
+// 	if err != nil {
+// 		log.Printf("[ERROR] Failed to marshal query: %v", err)
+// 		http.Error(w, "Internal server error", http.StatusInternalServerError)
+// 		return
+// 	}
+
+// 	headers := map[string]string{"Content-Type": "application/json"}
+// 	gqlResponse, err := makePostRequest(endpoint, queryBytes, headers)
+// 	if err != nil {
+// 		log.Printf("[ERROR] Failed to make request: %v", err)
+// 		http.Error(w, "Internal server error", http.StatusInternalServerError)
+// 		return
+// 	}
+
+// 	var response struct {
+// 		Data struct {
+// 			Post struct {
+// 				Id         string `json:"id"`
+// 				Title      string `json:"title"`
+// 				Url        string `json:"url"`
+// 				CoverImage struct {
+// 					Url string `json:"url"`
+// 				} `json:"coverImage"`
+// 				Author struct {
+// 					Name string `json:"name"`
+// 				} `json:"author"`
+// 				ReadTimeInMinutes int    `json:"readTimeInMinutes"`
+// 				SubTitle          string `json:"subtitle"`
+// 				Brief             string `json:"brief"`
+// 				Content           struct {
+// 					Text string `json:"text"`
+// 				} `json:"content"`
+// 			} `json:"post"`
+// 		} `json:"data"`
+// 	}
+// 	if err := json.Unmarshal(gqlResponse, &response); err != nil {
+// 		log.Printf("[ERROR] Failed to unmarshal response: %v", err)
+// 		http.Error(w, "Internal server error", http.StatusInternalServerError)
+// 		return
+// 	}
+
+// 	const maxContentLength = 150
+// 	content := response.Data.Post.Content.Text
+// 	if len(content) > maxContentLength {
+// 		content = content[:maxContentLength] + "..."
+// 	}
+
+// 	prompt := fmt.Sprintf(
+// 		"Write a post that i can post it in linkedin and twitter (X) for this blog:\n\n"+
+// 			"Title: %s\n"+
+// 			"Subtitle: %s\n"+
+// 			"Brief: %s\n"+
+// 			"Content snippet: %s\n\n"+
+// 			"Note: The tone should be human, engaging, and conversational. Encourage readers to click the blog link for more details. Avoid sounding robotic or generic. Mention the blog’s key takeaway and invite readers to check it out and make sure it was short enough and dont be too verbose as twitter and linkedin has character limit on how much we can tweet or post so please keep it short and also make sure to generate single post that can be used for both linkedin and twitter rather seperately and dont use any wild card characters like * and without commentary.",
+// 		response.Data.Post.Title,
+// 		response.Data.Post.SubTitle,
+// 		response.Data.Post.Brief,
+// 		content,
+// 	)
+// 	aiResponse, err := InvokeAi(prompt)
+// 	if err != nil {
+// 		http.Error(w, "Failed to generate post content", http.StatusInternalServerError)
+// 		return
+// 	}
+
+// 	// Post to selected platforms
+// 	for _, platform := range requestBody.Platforms {
+// 		switch platform {
+// 		case "linkedin":
+// 			err = linkedPostHandler(aiResponse, user.LinkedInOauthKey)
+// 			if err != nil {
+// 				log.Printf("[ERROR] Failed to post content to LinkedIn: %v", err)
+// 				return
+// 			}
+// 		case "twitter":
+// 			err = PostTweetHandler(aiResponse, blogId, oauth1.NewToken(user.XOAuthToken, user.XOAuthSecret))
+// 			if err != nil {
+// 				log.Printf("[ERROR] Failed to post content to Twitter: %v", err)
+// 				return
+// 			}
+// 		}
+// 	}
+// 	if err != nil {
+// 		log.Printf("[ERROR] Failed to update user with id: %s and error is %s", userId, err)
+// 		w.WriteHeader(http.StatusPartialContent)
+// 		w.Write([]byte(`{"success": "false", "reason": "Failed to update user with shared blog"}`))
+// 		return
+// 	}
+// 	// check if the blog is already shared by the user
+// 	var newSharedBlog models.SharedBlog
+// 	isFound := false
+// 	for i := range user.SharedBlogs {
+// 		if user.SharedBlogs[i].Id == response.Data.Post.Id {
+// 			user.SharedBlogs[i].SharedTime = time.Now().Format(time.RFC3339)
+// 			err = repo.UpdateUser(userId, user)
+// 			isFound = true
+// 			if err != nil {
+// 				log.Printf("[ERROR] Failed to update user with id: %s and error is %s", userId, err)
+// 				w.WriteHeader(http.StatusPartialContent)
+// 				w.Write([]byte(`{"success": "false", "reason": "Failed to update user with shared blog"}`))
+// 				return
+// 			}
+// 			break
+// 		}
+// 	}
+
+// 	if !isFound {
+// 		newSharedBlog.Id = response.Data.Post.Id
+// 		newSharedBlog.Title = response.Data.Post.Title
+// 		newSharedBlog.Url = response.Data.Post.Url
+// 		newSharedBlog.CoverImage = models.Image{URL: response.Data.Post.CoverImage.Url}
+// 		newSharedBlog.Author = models.Author{Name: response.Data.Post.Author.Name}
+// 		newSharedBlog.ReadTimeInMinutes = response.Data.Post.ReadTimeInMinutes
+// 		newSharedBlog.SharedTime = time.Now().Format(time.RFC3339)
+// 		user.SharedBlogs = append(user.SharedBlogs, newSharedBlog)
+// 		err = repo.UpdateUser(userId, user)
+// 		if err != nil {
+// 			log.Printf("[ERROR] Failed to update user with id: %s and error is %s", userId, err)
+// 			w.WriteHeader(http.StatusPartialContent)
+// 			w.Write([]byte(`{"success": "false", "reason": "Failed to update user with shared blog"}`))
+// 			return
+// 		}
+// 	}
+
+// 	w.WriteHeader(http.StatusOK)
+// 	w.Write([]byte(`{"success": true}`))
+// }
 
 func ShareBlogHandler(w http.ResponseWriter, req *http.Request) {
 	userId, err := ValidateLogin(req)
@@ -1118,194 +1308,75 @@ func ShareBlogHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Validate platforms
-	validPlatforms := map[string]bool{
-		"twitter":  true,
-		"linkedin": true,
-	}
-	if len(requestBody.Platforms) == 0 {
-		http.Error(w, "At least one platform must be specified", http.StatusBadRequest)
-		return
-	}
-	for _, platform := range requestBody.Platforms {
-		if !validPlatforms[platform] {
-			http.Error(w, "Invalid platform specified", http.StatusBadRequest)
-			return
-		}
-	}
-	query := models.GraphQLQuery{
-		Query: `query Post($id: ID!) {
-            post(id: $id) {
-                id
-                url
-                coverImage {
-                    url
-                }
-                author {
-                    name
-                }
-                readTimeInMinutes
-                title
-                subtitle
-                brief
-                content {
-                    text
-                }
-            }
-        }`,
-		Variables: map[string]interface{}{
-			"id": blogId,
-		},
-	}
-
-	endpoint := "https://gql.hashnode.com"
-	queryBytes, err := json.Marshal(query)
+	err = services.ProcessSharedBlog(user, blogId, requestBody.Platforms)
 	if err != nil {
-		log.Printf("[ERROR] Failed to marshal query: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		log.Printf("[ERROR] Failed to share blog: %v", err)
+		http.Error(w, "Failed to share blog", http.StatusInternalServerError)
 		return
 	}
-
-	headers := map[string]string{"Content-Type": "application/json"}
-	gqlResponse, err := makePostRequest(endpoint, queryBytes, headers)
-	if err != nil {
-		log.Printf("[ERROR] Failed to make request: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
-
-	var response struct {
-		Data struct {
-			Post struct {
-				Id         string `json:"id"`
-				Title      string `json:"title"`
-				Url        string `json:"url"`
-				CoverImage struct {
-					Url string `json:"url"`
-				} `json:"coverImage"`
-				Author struct {
-					Name string `json:"name"`
-				} `json:"author"`
-				ReadTimeInMinutes int    `json:"readTimeInMinutes"`
-				SubTitle          string `json:"subtitle"`
-				Brief             string `json:"brief"`
-				Content           struct {
-					Text string `json:"text"`
-				} `json:"content"`
-			} `json:"post"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(gqlResponse, &response); err != nil {
-		log.Printf("[ERROR] Failed to unmarshal response: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
-
-	const maxContentLength = 150
-	content := response.Data.Post.Content.Text
-	if len(content) > maxContentLength {
-		content = content[:maxContentLength] + "..."
-	}
-
-	prompt := fmt.Sprintf(
-		"Write a post that i can post it in linkedin and twitter (X) for this blog:\n\n"+
-			"Title: %s\n"+
-			"Subtitle: %s\n"+
-			"Brief: %s\n"+
-			"Content snippet: %s\n\n"+
-			"Note: The tone should be human, engaging, and conversational. Encourage readers to click the blog link for more details. Avoid sounding robotic or generic. Mention the blog’s key takeaway and invite readers to check it out and make sure it was short enough and dont be too verbose as twitter and linkedin has character limit on how much we can tweet or post so please keep it short and also make sure to generate single post that can be used for both linkedin and twitter rather seperately and dont use any wild card characters like * and without commentary.",
-		response.Data.Post.Title,
-		response.Data.Post.SubTitle,
-		response.Data.Post.Brief,
-		content,
-	)
-	aiResponse, err := InvokeAi(prompt)
-	if err != nil {
-		http.Error(w, "Failed to generate post content", http.StatusInternalServerError)
-		return
-	}
-
-	// Post to selected platforms
-	for _, platform := range requestBody.Platforms {
-		switch platform {
-		case "linkedin":
-			err = linkedPostHandler(aiResponse, user.LinkedInOauthKey)
-			if err != nil {
-				log.Printf("[ERROR] Failed to post content to LinkedIn: %v", err)
-				return
-			}
-		case "twitter":
-			err = PostTweetHandler(aiResponse, blogId, oauth1.NewToken(user.XOAuthToken, user.XOAuthSecret))
-			if err != nil {
-				log.Printf("[ERROR] Failed to post content to Twitter: %v", err)
-				return
-			}
-		}
-	}
-	if err != nil {
-		log.Printf("[ERROR] Failed to update user with id: %s and error is %s", userId, err)
-		w.WriteHeader(http.StatusPartialContent)
-		w.Write([]byte(`{"success": "false", "reason": "Failed to update user with shared blog"}`))
-		return
-	}
-	// check if the blog is already shared by the user
-	var newSharedBlog models.SharedBlog
-	isFound := false
-	for i := range user.SharedBlogs {
-		if user.SharedBlogs[i].Id == response.Data.Post.Id {
-			user.SharedBlogs[i].SharedTime = time.Now().Format(time.RFC3339)
-			err = repo.UpdateUser(userId, user)
-			isFound = true
-			if err != nil {
-				log.Printf("[ERROR] Failed to update user with id: %s and error is %s", userId, err)
-				w.WriteHeader(http.StatusPartialContent)
-				w.Write([]byte(`{"success": "false", "reason": "Failed to update user with shared blog"}`))
-				return
-			}
-			break
-		}
-	}
-
-	if !isFound {
-		newSharedBlog.Id = response.Data.Post.Id
-		newSharedBlog.Title = response.Data.Post.Title
-		newSharedBlog.Url = response.Data.Post.Url
-		newSharedBlog.CoverImage = models.Image{URL: response.Data.Post.CoverImage.Url}
-		newSharedBlog.Author = models.Author{Name: response.Data.Post.Author.Name}
-		newSharedBlog.ReadTimeInMinutes = response.Data.Post.ReadTimeInMinutes
-		newSharedBlog.SharedTime = time.Now().Format(time.RFC3339)
-		user.SharedBlogs = append(user.SharedBlogs, newSharedBlog)
-		err = repo.UpdateUser(userId, user)
-		if err != nil {
-			log.Printf("[ERROR] Failed to update user with id: %s and error is %s", userId, err)
-			w.WriteHeader(http.StatusPartialContent)
-			w.Write([]byte(`{"success": "false", "reason": "Failed to update user with shared blog"}`))
-			return
-		}
-	}
+	log.Printf("[INFO] Blog with ID %s shared successfully by user with ID %s", blogId, userId)
 
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"success": true}`))
 }
 
 func ScheduleBlogHandler(w http.ResponseWriter, r *http.Request) {
+	userId, err := ValidateLogin(r)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	user, err := repo.GetUserById(userId)
+	if err != nil {
+		log.Printf("[ERROR] Failed to get user for the id: %s and error is %s", userId, err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	if user == nil {
+		log.Printf("[ERROR] User with id: %s not found", userId)
+		http.Error(w, "User not found", http.StatusNotFound)
+		return
+	}
+	if !user.Verified {
+		log.Printf("[ERROR] User with id: %s is not verified", userId)
+		http.Error(w, "User is not verified", http.StatusForbidden)
+		return
+	}
 	var blogData models.ScheduledBlogData
-	err := json.NewDecoder(r.Body).Decode(&blogData)
+	err = json.NewDecoder(r.Body).Decode(&blogData)
 	if err != nil {
 		http.Error(w, "Failed to parse JSON", http.StatusBadRequest)
 		return
 	}
+	blogData.UserID = userId
 	err = blogData.ScheduledBlog.Validate()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	//check if the user has already scheduled the blog
+	for i := range user.ScheduledBlogs {
+		if user.ScheduledBlogs[i].Id == blogData.ScheduledBlog.Id {
+			http.Error(w, "Blog already scheduled", http.StatusBadRequest)
+			return
+		}
+	}
+
 	err = taskScheduler.AddTask(blogData)
 	if err != nil {
 		http.Error(w, "Failed to store scheduled task", http.StatusInternalServerError)
 		return
 	}
-	log.Println("[INFO] Task successfully scheduled!")
+
+	user.ScheduledBlogs = append(user.ScheduledBlogs, blogData.ScheduledBlog)
+	err = repo.UpdateUser(userId, user)
+	if err != nil {
+		log.Printf("[ERROR] Failed to update user with id: %s and error is %s", userId, err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("[INFO] Blog with ID %s scheduled successfully by user with ID %s", blogData.ScheduledBlog.Id, userId)
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"success": true}`))
 
