@@ -58,10 +58,6 @@ func CreateIndexes() error {
 			Keys:    bson.D{{Key: "key", Value: 1}},
 			Options: options.Index().SetUnique(true),
 		},
-		{
-			Keys:    bson.D{{Key: "id", Value: 1}},
-			Options: options.Index().SetUnique(true),
-		},
 	}
 
 	_, err := cacheCollection.Indexes().CreateMany(ctx, indexes)
