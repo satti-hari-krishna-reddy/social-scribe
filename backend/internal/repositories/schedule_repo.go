@@ -45,14 +45,15 @@ func DeleteScheduledTask(task models.ScheduledBlogData) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Delete based on both user_id and blog.id  extra safety!
-	_, err := scheduledItemsCollection.DeleteOne(ctx, bson.M{
-		"user_id": task.UserID,
-		"blog.id": task.ScheduledBlog.Id,
+	result, err := scheduledItemsCollection.DeleteOne(ctx, bson.M{
+		"user_id":      task.UserID,
+		"blog.blog.id": task.ScheduledBlog.Id,
 	})
 	if err != nil {
 		log.Printf("[ERROR] Failed to delete scheduled task: %v", err)
 		return err
 	}
+	log.Printf("[INFO] Deleted scheduled task, deleted count: %d", result.DeletedCount)
+
 	return nil
 }
