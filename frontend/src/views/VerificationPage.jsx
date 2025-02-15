@@ -16,10 +16,10 @@ const VerificationPage = ({user, setUser}) => {
   const [hashnodeVerified, ] = useState(user?.hashnode_verified);
   const [hashnodeApiKey, setHashnodeApiKey] = useState("");
   const [disabled, setDisabled] = useState(true);
-  // const [emailVerified, ] = useState(true);
-  // const [otp, setOtp] = useState("");
-  // const [otpStatus, setOtpStatus] = useState(null);
-  // const [email, ] = useState(user?.username);
+  const [emailVerified, setEmailVerified] = useState(user?.email_verified);
+  const [otp, setOtp] = useState("");
+  const [otpStatus, setOtpStatus] = useState(null);
+  const [email, ] = useState(user?.username);
 
 
   const handleTwitterConnect = () => {
@@ -58,21 +58,21 @@ const VerificationPage = ({user, setUser}) => {
     }
   };
 
-  // const handleOtpVerify = () => {
-  //   // Simulate OTP verification
-  //   if (otp === "123456") {
-  //       setEmailVerified(true);
-  //     setOtpStatus("success");
-  //   } else {
-  //     setOtpStatus("failed");
-  //   }
-  // };
+  const handleOtpVerify = () => {
+    // Simulate OTP verification
+    if (otp === "123456") {
+        setEmailVerified(true);
+      setOtpStatus("success");
+    } else {
+      setOtpStatus("failed");
+    }
+  };
 
-  // const handleResendOtp = () => {
-  //   // Simulate OTP resend
-  //   setOtp("");
-  //   setOtpStatus(null);
-  // };
+  const handleResendOtp = () => {
+    // Simulate OTP resend
+    setOtp("");
+    setOtpStatus(null);
+  };
   
   const handleNext = () => {
     setUser({
@@ -198,8 +198,7 @@ const VerificationPage = ({user, setUser}) => {
         </Box>
         </Box>
 
-        {/* Verify Email */}
-        {/* <Box> 
+        <Box> 
             {emailVerified ? (
                 <Box display="flex" alignItems="center" gap="1rem" marginBottom="0.5rem">
                  <Typography>{email}</Typography>
@@ -238,7 +237,7 @@ const VerificationPage = ({user, setUser}) => {
             </Typography>
           )}
 </>}
-        </Box> */}
+        </Box>
         <Button sx={{ color: 'black', backgroundColor: 'white', marginTop : '20px', marginLeft : '450px' }} disabled={disabled}  onClick={handleNext}>
                 next
         </Button>

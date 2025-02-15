@@ -130,10 +130,27 @@ const BlogCard = ({ blog }) => {
     }
   };
 
-  const handleCancelSchedule = () => {
-    console.log('Cancel schedule for:', blog.id);
-    toast.info("Schedule canceled");
+  const handleCancelSchedule = async () => {
+
+    const payload = { id: blog.id };
+    try {
+      const response = await fetch("http://localhost:9696/api/v1/user/scheduled-blogs/cancel", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to cancel the schedule");
+      }
+      toast.info("Schedule canceled");
+    }
+    catch (error) {
+      console.error("Error canceling the schedule:", error.message);
+      toast.error(error.message || "Failed to cancel the schedule. Does the schedule exist?");
   };
+}
 
   const openPopover = Boolean(anchorEl);
   const popoverId = openPopover ? 'share-popover' : undefined;
