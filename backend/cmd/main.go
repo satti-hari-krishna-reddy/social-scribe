@@ -26,6 +26,7 @@ func setupCors() *cors.Cors {
 
 func main() {
 	repo.InitMongoDb()
+	repo.InitRedis()
 	router := v1.RegisterRoutes()
 	hostname, err := os.Hostname()
 	if err != nil {
