@@ -11,26 +11,47 @@ import (
 	"time"
 )
 
-type TaskHeap []models.ScheduledBlogData
-
-func (h TaskHeap) Len() int { return len(h) }
-
-func (h TaskHeap) Less(i, j int) bool {
-	return h[i].ScheduledBlog.ScheduledTime.Before(h[j].ScheduledBlog.ScheduledTime)
+type TaskHeap struct {
+	tasks    []models.ScheduledBlogData
+	indexMap map[string]int
 }
 
-func (h TaskHeap) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
+func (h TaskHeap) Len() int { return len(h.tasks) }
+
+func (h TaskHeap) Less(i, j int) bool {
+	return h.tasks[i].ScheduledBlog.ScheduledTime.Before(h.tasks[j].ScheduledBlog.ScheduledTime)
+}
+
+func (h TaskHeap) Swap(i, j int) {
+	h.tasks[i], h.tasks[j] = h.tasks[j], h.tasks[i]
+	h.indexMap[h.tasks[i].ScheduledBlog.Blog.Id] = i
+	h.indexMap[h.tasks[j].ScheduledBlog.Blog.Id] = j
+}
 
 func (h *TaskHeap) Push(x interface{}) {
-	*h = append(*h, x.(models.ScheduledBlogData))
+	task := x.(models.ScheduledBlogData)
+	h.tasks = append(h.tasks, task)
+	h.indexMap[task.ScheduledBlog.Blog.Id] = len(h.tasks) - 1
 }
 
 func (h *TaskHeap) Pop() interface{} {
-	old := *h
-	n := len(old)
-	x := old[n-1]
-	*h = old[0 : n-1]
-	return x
+	n := len(h.tasks)
+	task := h.tasks[n-1]
+	h.tasks = h.tasks[0 : n-1]
+	delete(h.indexMap, task.ScheduledBlog.Blog.Id)
+	return task
+}
+
+func (h *TaskHeap) RemoveAt(index int) models.ScheduledBlogData {
+	n := len(h.tasks)
+	h.Swap(index, n-1)
+	removed := h.tasks[n-1]
+	h.tasks = h.tasks[:n-1]
+	delete(h.indexMap, removed.ScheduledBlog.Blog.Id)
+	if index < len(h.tasks) {
+		heap.Fix(h, index)
+	}
+	return removed
 }
 
 type Scheduler struct {
@@ -44,13 +65,15 @@ type Scheduler struct {
 func NewScheduler() *Scheduler {
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &Scheduler{
-		heap:      &TaskHeap{},
 		ctx:       ctx,
 		cancel:    cancel,
 		newTaskCh: make(chan struct{}, 1),
+		heap: &TaskHeap{
+			tasks:    []models.ScheduledBlogData{},
+			indexMap: make(map[string]int),
+		},
 	}
-	err := s.loadTasks()
-	if err != nil {
+	if err := s.loadTasks(); err != nil {
 		log.Printf("[ERROR] Error loading tasks, Stopping the Scheduler: %v", err)
 		cancel()
 	}
@@ -86,16 +109,12 @@ func (s *Scheduler) runAgent() {
 			}
 		}
 
-		// Peek at the next task
-		nextTask := (*s.heap)[0]
+		nextTask := s.heap.tasks[0]
 		scheduledTimeUTC := nextTask.ScheduledBlog.ScheduledTime.UTC()
 		timeUntil := time.Until(scheduledTimeUTC)
-
-		// If the task is overdue or due immediately, force execution
 		if timeUntil <= 0 {
 			timeUntil = 1 * time.Millisecond
 		}
-
 		s.mu.Unlock()
 
 		if timeUntil == 1*time.Millisecond {
@@ -107,11 +126,9 @@ func (s *Scheduler) runAgent() {
 			} else {
 				s.mu.Unlock()
 			}
-			// continue to check for more tasks that are due immediately
 			continue
 		}
 
-		// Otherwise, set up or reset the timer for future tasks.
 		if timer == nil {
 			timer = time.NewTimer(timeUntil)
 		} else {
@@ -135,11 +152,8 @@ func (s *Scheduler) runAgent() {
 			} else {
 				s.mu.Unlock()
 			}
-
 		case <-s.newTaskCh:
-			// If a new task is added, recheck the heap
 			continue
-
 		case <-s.ctx.Done():
 			if timer != nil {
 				if !timer.Stop() {
@@ -155,9 +169,7 @@ func (s *Scheduler) runAgent() {
 }
 
 func (s *Scheduler) worker(task models.ScheduledBlogData) {
-
-	log.Printf("[INFO] Worker executing task for user %v with blog %v, for platforms %v", 
-	task.UserID, task.ScheduledBlog.Blog.Id, task.ScheduledBlog.Platforms)
+	log.Printf("[INFO] Worker executing task for user %v with blog %v, for platforms %v", task.UserID, task.ScheduledBlog.Blog.Id, task.ScheduledBlog.Platforms)
 
 	user, err := repo.GetUserById(task.UserID)
 	if err != nil || user == nil {
@@ -214,8 +226,13 @@ func (s *Scheduler) loadTasks() error {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.heap = &TaskHeap{}
-	*s.heap = append(*s.heap, tasks...)
+	s.heap = &TaskHeap{
+		tasks:    tasks,
+		indexMap: make(map[string]int),
+	}
+	for i, task := range s.heap.tasks {
+		s.heap.indexMap[task.ScheduledBlog.Blog.Id] = i
+	}
 	heap.Init(s.heap)
 	log.Printf("[INFO] Loaded %d tasks successfully into heap", len(tasks))
 	return nil
@@ -232,8 +249,28 @@ func (s *Scheduler) AddTask(task models.ScheduledBlogData) error {
 	heap.Push(s.heap, task)
 
 	select {
-	// Send a signal to the agent informing about the newly added task
 	case s.newTaskCh <- struct{}{}:
+	default:
+	}
+	return nil
+}
+
+func (s *Scheduler) RemoveTask(blogId string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	index, ok := s.heap.indexMap[blogId]
+	if !ok {
+		return nil
+	}
+	task := s.heap.RemoveAt(index)
+	err := repo.DeleteScheduledTask(task)
+	if err != nil {
+		log.Printf("[ERROR] Error deleting task: %v", err)
+		return err
+	}
+	select {
+	case s.newTaskCh <- struct{}{}:  // so we have to notify the agent to recheck the heap
 	default:
 	}
 	return nil
