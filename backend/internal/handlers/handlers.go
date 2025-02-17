@@ -8,12 +8,15 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/mail"
 	"os"
 
 	"social-scribe/backend/internal/models"
 	repo "social-scribe/backend/internal/repositories"
 	"social-scribe/backend/internal/scheduler"
 	"social-scribe/backend/internal/services"
+	"social-scribe/backend/internal/middlewares"
+
 	"strings"
 	"time"
 
@@ -22,10 +25,8 @@ import (
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
-	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
 	"golang.org/x/crypto/bcrypt"
-	"math/rand"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/linkedin"
 )
@@ -62,47 +63,49 @@ func InitScheduler(s *scheduler.Scheduler) {
 	taskScheduler = s
 }
 
+
 func SignupUserHandler(resp http.ResponseWriter, req *http.Request) {
 	if req.Body == nil {
-		http.Error(resp, `{"error": "Failed to parse credentials: body is empty"}`, http.StatusBadRequest)
-		return
-	}
-	user := models.User{}
-
-	err := json.NewDecoder(req.Body).Decode(&user)
-	if err != nil {
-		http.Error(resp, `{"error": "Bad request: unable to decode JSON"}`, http.StatusBadRequest)
+		http.Error(resp, `{"error": "Request body is empty"}`, http.StatusBadRequest)
 		return
 	}
 
-	user.UserName = strings.TrimSpace(user.UserName)
-	user.UserName = strings.Join(strings.Fields(strings.ToLower(user.UserName)), "")
+	var user models.User
+	if err := json.NewDecoder(req.Body).Decode(&user); err != nil {
+		http.Error(resp, `{"error": "Unable to decode JSON"}`, http.StatusBadRequest)
+		return
+	}
+
+	user.UserName = strings.TrimSpace(strings.ToLower(user.UserName))
 	user.PassWord = strings.TrimSpace(user.PassWord)
 
-	if len(user.UserName) < 4 || len(user.UserName) > 64 {
-		http.Error(resp, `{"error": "The username should contain a minimum of 4 and maximum of 64 characters"}`, http.StatusBadRequest)
-		return
-	}
-	if len(user.PassWord) < 8 || len(user.PassWord) > 128 {
-		http.Error(resp, `{"error": "The password should contain a minimum of 8 and maximum of 128 characters"}`, http.StatusBadRequest)
+	// Validate email using net/mail.
+	if _, err := mail.ParseAddress(user.UserName); err != nil {
+		http.Error(resp, `{"error": "Invalid email address"}`, http.StatusBadRequest)
 		return
 	}
 
+	if len(user.PassWord) < 8 || len(user.PassWord) > 128 {
+		http.Error(resp, `{"error": "Password must be between 8 and 128 characters"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Check if user already exists.
 	existingUser, err := repo.GetUserByName(user.UserName)
 	if err != nil {
 		http.Error(resp, `{"error": "Internal server error"}`, http.StatusInternalServerError)
-		log.Printf("[ERROR] Error checking existing user: %v", err)
+		log.Printf("[ERROR] Checking existing user: %v", err)
 		return
 	}
 	if existingUser != nil {
-		http.Error(resp, `{"message" : "Username already taken"}`, http.StatusConflict)
+		http.Error(resp, `{"message": "Username already taken"}`, http.StatusConflict)
 		return
 	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.PassWord), bcrypt.DefaultCost)
 	if err != nil {
 		http.Error(resp, `{"error": "Internal server error"}`, http.StatusInternalServerError)
-		log.Printf("[ERROR] Error hashing password for user '%s': %v", user.UserName, err)
+		log.Printf("[ERROR] Hashing password for user '%s': %v", user.UserName, err)
 		return
 	}
 
@@ -115,15 +118,14 @@ func SignupUserHandler(resp http.ResponseWriter, req *http.Request) {
 
 	userId, err := repo.InsertUser(user)
 	if err != nil {
-		log.Printf("[ERROR] Unable to create user %v: %v", user.UserName, err)
+		log.Printf("[ERROR] Creating user %s: %v", user.UserName, err)
 		http.Error(resp, `{"error": "Failed to create user"}`, http.StatusInternalServerError)
 		return
 	}
 
 	sessionToken := uuid.New().String()
 	expiration := time.Now().Add(24 * time.Hour)
-	err = repo.SetCache(sessionToken, userId, 24*time.Hour)
-	if err != nil {
+	if err := repo.SetCache(sessionToken, userId, 24*time.Hour); err != nil {
 		http.Error(resp, `{"error": "Failed to create session"}`, http.StatusInternalServerError)
 		return
 	}
@@ -136,24 +138,42 @@ func SignupUserHandler(resp http.ResponseWriter, req *http.Request) {
 		Secure:   false,
 		Expires:  expiration,
 	})
-
-	user.PassWord = ""
-	responseJson, err := json.Marshal(user)
+	cacheKey := fmt.Sprintf("email_otp_%s", userId)
+	otp := services.GenerateOTP()
+	err = repo.SetCache(cacheKey, otp, 24*time.Hour)
 	if err != nil {
-		resp.WriteHeader(http.StatusInternalServerError)
-		resp.Write([]byte(`{"success": false, "reason": "Failed unpacking user"}`))
+		log.Printf("[ERROR] Failed to store OTP in cache for user %s: %v", user.UserName, err)
+		http.Error(resp, `{"error": "Failed to store OTP"}`, http.StatusInternalServerError)
+		return
+	}
+	message := fmt.Sprintf("Your OTP is: %s \n Valid for next 24 hours", otp)
+
+	if err := services.SendEmail(user.UserName, message); err != nil {
+		log.Printf("[ERROR] Sending OTP email to %s: %v", user.UserName, err)
+		http.Error(resp, `{"error": "Failed to send verification email"}`, http.StatusInternalServerError)
 		return
 	}
 
-	log.Printf("[INFO] User '%s' successfully registered with ID: %s", user.UserName, userId)
+	user.PassWord = ""
+	objectId, err := primitive.ObjectIDFromHex(userId)
+	if err != nil {
+		http.Error(resp, `{"error": "Invalid user ID format"}`, http.StatusInternalServerError)
+		return
+	}
+	user.Id = objectId
+	responseJson, err := json.Marshal(user)
+	if err != nil {
+		http.Error(resp, `{"error": "Failed to process user data"}`, http.StatusInternalServerError)
+		return
+	}
 
-	resp.WriteHeader(http.StatusCreated)
+	log.Printf("[INFO] User '%s' registered with ID: %s", user.UserName, userId)
 	resp.Header().Set("Content-Type", "application/json")
-	resp.Write([]byte(responseJson))
+	resp.WriteHeader(http.StatusCreated)
+	resp.Write(responseJson)
 }
 
 func LoginUserHandler(resp http.ResponseWriter, req *http.Request) {
-
 	if req.Body == nil {
 		http.Error(resp, `{"error": "Failed to parse login credentials: body is empty"}`, http.StatusBadRequest)
 		return
@@ -220,9 +240,9 @@ func LoginUserHandler(resp http.ResponseWriter, req *http.Request) {
 }
 
 func GetUserInfoHandler(resp http.ResponseWriter, req *http.Request) {
-	userId, err := ValidateLogin(req)
-	if err != nil {
-		http.Error(resp, "Unauthorized", http.StatusUnauthorized)
+	userId, ok := req.Context().Value(middlewares.UserIDKey).(string)
+	if !ok {
+		http.Error(resp, "Unauthorized: User ID not found", http.StatusUnauthorized)
 		return
 	}
 	user, err := repo.GetUserById(userId)
@@ -252,10 +272,9 @@ func GetUserInfoHandler(resp http.ResponseWriter, req *http.Request) {
 }
 
 func GetUserNotificationsHandler(resp http.ResponseWriter, req *http.Request) {
-	vars := mux.Vars(req)
-	userId := vars["id"]
-	if len(userId) == 0 {
-		http.Error(resp, `{"error": "cant able parse id field, reason is missing id field in the request"}`, http.StatusBadRequest)
+	userId, ok := req.Context().Value(middlewares.UserIDKey).(string)
+	if !ok {
+		http.Error(resp, "Unauthorized: User ID not found", http.StatusUnauthorized)
 		return
 	}
 	user, err := repo.GetUserById(userId)
@@ -283,80 +302,10 @@ func GetUserNotificationsHandler(resp http.ResponseWriter, req *http.Request) {
 
 }
 
-func GetUserSharedBlogsHandler(resp http.ResponseWriter, req *http.Request) {
-	vars := mux.Vars(req)
-	userId := vars["id"]
-	if len(userId) == 0 {
-		resp.WriteHeader(401)
-		resp.Write([]byte(`{"success" : false, "reason" : "user id not found in the request}`))
-		return
-	}
-	user, err := repo.GetUserById(userId)
-	if err != nil {
-		log.Printf("[ERROR] Failed to find user for the id: %s and error is %s", userId, err)
-		resp.WriteHeader(500)
-		resp.Write([]byte(`{"success" : false}`))
-		return
-	}
-	if user == nil {
-		resp.WriteHeader(401)
-		resp.Write([]byte(`{"success" : false, "reason" : "user id is invalid"}`))
-		return
-	}
-	response := map[string]interface{}{
-		"shared_blogs": user.SharedBlogs,
-	}
-	responseJson, err := json.Marshal(response)
-	if err != nil {
-		resp.WriteHeader(401)
-		resp.Write([]byte(`{"sucess" : false, "reason" : "Failed unpacking}`))
-		return
-	}
-	resp.WriteHeader(200)
-	resp.Write(responseJson)
-
-}
-
-func GetUserScheduledBlogsHandler(resp http.ResponseWriter, req *http.Request) {
-	vars := mux.Vars(req)
-	userId := vars["id"]
-	if len(userId) == 0 {
-		resp.WriteHeader(401)
-		resp.Write([]byte(`"success" : false, "reason" : "user id not provided`))
-		return
-
-	}
-	user, err := repo.GetUserById(userId)
-	if user == nil {
-		resp.WriteHeader(401)
-		resp.Write([]byte(`"success" : false, "reason" : "user id is invalid`))
-		return
-	}
-	if err != nil {
-		log.Printf("[ERROR] Failed to find user for the id: %s and error is %s", userId, err)
-		resp.WriteHeader(500)
-		resp.Write([]byte(`{"success" : "false"}`))
-		return
-	}
-	response := map[string]interface{}{
-		"scheduled_blogs": user.ScheduledBlogs,
-	}
-	responseJson, err := json.Marshal(response)
-	if err != nil {
-		resp.WriteHeader(500)
-		resp.Write([]byte(`{"success" : false}`))
-		return
-	}
-	resp.WriteHeader(200)
-	resp.Write(responseJson)
-}
-
 func ClearUserNotificationsHandler(resp http.ResponseWriter, req *http.Request) {
-	vars := mux.Vars(req)
-	userId := vars["id"]
-	if len(userId) == 0 {
-		resp.WriteHeader(401)
-		resp.Write([]byte(`"success" : false, "reason" : "missing user id in the request"`))
+	userId, ok := req.Context().Value(middlewares.UserIDKey).(string)
+	if !ok {
+		http.Error(resp, "Unauthorized: User ID not found", http.StatusUnauthorized)
 		return
 	}
 	user, err := repo.GetUserById(userId)
@@ -384,99 +333,29 @@ func ClearUserNotificationsHandler(resp http.ResponseWriter, req *http.Request) 
 	resp.Write([]byte(`{"success" : true, "message" : "notifications cleared sucessfully"}`))
 }
 
-func ScheduleUserBlogHandler(resp http.ResponseWriter, req *http.Request) {
-	var blogData models.ScheduledBlogData
-	decoder := json.NewDecoder(req.Body)
-	defer req.Body.Close()
-
-	if err := decoder.Decode(&blogData); err != nil {
-		http.Error(resp, "Bad request, failed to parse JSON", http.StatusBadRequest)
+func GetUserBlogsHandler(resp http.ResponseWriter, req *http.Request) {
+	userId, ok := req.Context().Value(middlewares.UserIDKey).(string)
+	if !ok {
+		http.Error(resp, "Unauthorized: User ID not found", http.StatusUnauthorized)
 		return
 	}
-
-	if len(blogData.UserID) == 0 {
-		resp.WriteHeader(http.StatusBadRequest)
-		resp.Write([]byte(`{"success" : false, "reason" : "no user id found"}`))
-		return
-	}
-
-	user, err := repo.GetUserById(blogData.UserID)
-	if err != nil {
-		resp.WriteHeader(http.StatusInternalServerError)
-		resp.Write([]byte(`{"success" : false}`))
-		return
-	}
-
-	if user == nil {
-		resp.WriteHeader(http.StatusBadRequest)
-		resp.Write([]byte(`{"success" : false, "reason" : "user id is not valid"}`))
-		return
-	}
-
-	if blogData.ScheduledBlog.ScheduledTime.IsZero() {
-		resp.WriteHeader(http.StatusBadRequest)
-		resp.Write([]byte(`{"success" : false, "reason" : "scheduled time is missing"}`))
-		return
-	}
-
-	_, err = time.Parse(time.RFC3339, blogData.ScheduledBlog.ScheduledTime.Format(time.RFC3339))
-	if err != nil {
-		resp.WriteHeader(http.StatusBadRequest)
-		resp.Write([]byte(`{"success" : false, "reason" : "invalid scheduled time format, must be RFC3339"}`))
-		return
-	}
-
-	if err := blogData.ScheduledBlog.Validate(); err != nil {
-		http.Error(resp, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	durableFunctionURL := "https://<your-function-app>.azurewebsites.net/api/orchestrator"
-	reqBody, _ := json.Marshal(blogData)
-
-	durableResp, err := http.Post(durableFunctionURL, "application/json", bytes.NewBuffer(reqBody))
-	if err != nil || durableResp.StatusCode != http.StatusOK {
-		log.Printf("[DEBUG] Failed to create durable function, reason: %s", err)
-		resp.WriteHeader(http.StatusInternalServerError)
-		resp.Write([]byte(`{"success": false, "reason": "failed to create a cloud function"}`))
-		return
-	}
-
-	var instanceID string
-	if err := json.NewDecoder(durableResp.Body).Decode(&instanceID); err != nil {
-		resp.WriteHeader(http.StatusInternalServerError)
-		resp.Write([]byte(`{"success": false}`))
-		return
-	}
-
-	resp.WriteHeader(http.StatusOK)
-	resp.Write([]byte("Blog scheduled validated"))
-}
-
-func GetUserBlogsHandler(w http.ResponseWriter, r *http.Request) {
-	userId, err := ValidateLogin(r)
-	if err != nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
 	user, err := repo.GetUserById(userId)
 	if err != nil {
 		log.Printf("[ERROR] Failed to get user for id: %s - %v", userId, err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		http.Error(resp, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 	if user == nil {
 		log.Printf("[ERROR] User with id: %s not found", userId)
-		http.Error(w, "User not found", http.StatusNotFound)
+		http.Error(resp, "User not found", http.StatusNotFound)
 		return
 	}
 
-	category := strings.ToLower(r.URL.Query().Get("category"))
+	category := strings.ToLower(req.URL.Query().Get("category"))
 	if category == "" {
 		category = "all"
 	} else if category != "all" && category != "scheduled" && category != "shared" {
-		http.Error(w, "Invalid category", http.StatusBadRequest)
+		http.Error(resp, "Invalid category", http.StatusBadRequest)
 		return
 	}
 
@@ -514,7 +393,7 @@ func GetUserBlogsHandler(w http.ResponseWriter, r *http.Request) {
 		queryBytes, err := json.Marshal(query)
 		if err != nil {
 			log.Printf("[ERROR] Failed to marshal query: %v", err)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(resp, "Internal server error", http.StatusInternalServerError)
 			return
 		}
 
@@ -522,14 +401,14 @@ func GetUserBlogsHandler(w http.ResponseWriter, r *http.Request) {
 		gqlResponse, err := services.MakePostRequest(endpoint, queryBytes, headers)
 		if err != nil {
 			log.Printf("[ERROR] Failed to make request: %v", err)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(resp, "Internal server error", http.StatusInternalServerError)
 			return
 		}
 
 		var gqlData models.GraphQLResponse
 		if err := json.Unmarshal(gqlResponse, &gqlData); err != nil {
 			log.Printf("[ERROR] Failed to unmarshal response: %v", err)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(resp, "Internal server error", http.StatusInternalServerError)
 			return
 		}
 
@@ -543,44 +422,19 @@ func GetUserBlogsHandler(w http.ResponseWriter, r *http.Request) {
 	// Handle JSON marshaling errors
 	if jsonErr != nil {
 		log.Printf("[ERROR] Failed to marshal response: %v", jsonErr)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		http.Error(resp, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(fmt.Sprintf(`{"success": true, "blogs": %s}`, string(responseBytes))))
+	resp.Header().Set("Content-Type", "application/json")
+	resp.WriteHeader(http.StatusOK)
+	resp.Write([]byte(fmt.Sprintf(`{"success": true, "blogs": %s}`, string(responseBytes))))
 }
 
-// func makePostRequest(url string, body []byte, headers map[string]string) ([]byte, error) {
-// 	request, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
-// 	if err != nil {
-// 		return nil, fmt.Errorf("failed to create HTTP request: %v", err)
-// 	}
-
-// 	for key, value := range headers {
-// 		request.Header.Set(key, value)
-// 	}
-
-// 	client := &http.Client{}
-// 	response, err := client.Do(request)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("failed to execute HTTP request: %v", err)
-// 	}
-// 	defer response.Body.Close()
-
-// 	if response.StatusCode != http.StatusOK {
-// 		body, _ := ioutil.ReadAll(response.Body)
-// 		return nil, fmt.Errorf("GraphQL query failed with status code %d: %s", response.StatusCode, string(body))
-// 	}
-
-// 	return ioutil.ReadAll(response.Body)
-// }
-
-func ConnectXhandler(w http.ResponseWriter, r *http.Request) {
-	userId, err := ValidateLogin(r)
-	if err != nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+func ConnectXhandler(resp http.ResponseWriter, req *http.Request) {
+	userId, ok := req.Context().Value(middlewares.UserIDKey).(string)
+	if !ok {
+		http.Error(resp, "Unauthorized: User ID not found", http.StatusUnauthorized)
 		return
 	}
 	user, err := repo.GetUserById(userId)
@@ -596,7 +450,7 @@ func ConnectXhandler(w http.ResponseWriter, r *http.Request) {
 	requestToken, requestSecret, err := twitterConfig.RequestToken()
 	if err != nil {
 		fmt.Printf("error: %v", err)
-		http.Error(w, "Failed to get request token", http.StatusInternalServerError)
+		http.Error(resp, "Failed to get request token", http.StatusInternalServerError)
 		return
 	}
 	user.XOAuthToken = requestToken
@@ -609,29 +463,28 @@ func ConnectXhandler(w http.ResponseWriter, r *http.Request) {
 
 	authorizationURL, err := twitterConfig.AuthorizationURL(requestToken)
 	if err != nil {
-		http.Error(w, "Failed to get authorization URL", http.StatusInternalServerError)
+		http.Error(resp, "Failed to get authorization URL", http.StatusInternalServerError)
 		return
 	}
 
-	http.Redirect(w, r, authorizationURL.String(), http.StatusFound)
+	http.Redirect(resp, req, authorizationURL.String(), http.StatusFound)
 }
 
-func XcallbackHandler(w http.ResponseWriter, r *http.Request) {
-
-	userID, err := ValidateLogin(r)
-	if err != nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+func XcallbackHandler(resp http.ResponseWriter, req *http.Request) {
+	userID, ok := req.Context().Value(middlewares.UserIDKey).(string)
+	if !ok {
+		http.Error(resp, "Unauthorized: User ID not found", http.StatusUnauthorized)
 		return
 	}
 	user, err := repo.GetUserById(userID)
 	if err != nil {
-		http.Error(w, "Failed to get user", http.StatusInternalServerError)
+		http.Error(resp, "Failed to get user", http.StatusInternalServerError)
 		log.Printf("[ERROR] Failed to get user for the id: %s and error is %s", userID, err)
 
 		return
 	}
 	if user == nil {
-		http.Error(w, "User not found", http.StatusNotFound)
+		http.Error(resp, "User not found", http.StatusNotFound)
 		log.Printf("[ERROR] User with id: %s not found", userID)
 		return
 	}
@@ -640,16 +493,16 @@ func XcallbackHandler(w http.ResponseWriter, r *http.Request) {
 	secret := user.XOAuthSecret
 
 	requestTokenData := &oauth1.Token{Token: token, TokenSecret: secret}
-	verifier := r.URL.Query().Get("oauth_verifier")
+	verifier := req.URL.Query().Get("oauth_verifier")
 	if verifier == "" {
 		log.Printf("[ERROR] Missing OAuth verifier for user with id: %s", userID)
-		http.Error(w, "Missing OAuth verifier", http.StatusBadRequest)
+		http.Error(resp, "Missing OAuth verifier", http.StatusBadRequest)
 		return
 	}
 	accessToken, accessSecret, err := twitterConfig.AccessToken(requestTokenData.Token, requestTokenData.TokenSecret, verifier)
 	if err != nil {
 		log.Printf("[ERROR] Failed to get access token for user with id: %s and error is %s", userID, err)
-		http.Error(w, "Failed to get access token", http.StatusInternalServerError)
+		http.Error(resp, "Failed to get access token", http.StatusInternalServerError)
 		return
 	}
 	user.XOAuthToken = accessToken
@@ -662,39 +515,19 @@ func XcallbackHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	err = repo.UpdateUser(userID, user)
 	if err != nil {
-		http.Error(w, "Failed to update user", http.StatusInternalServerError)
+		http.Error(resp, "Failed to update user", http.StatusInternalServerError)
 		log.Printf("[ERROR] Failed to update user with id: %s and error is %s", userID, err)
 		return
 	}
 
 	log.Printf("[INFO] User with ID %s connected to X(twitter) Successfully", user.Id)
-	http.Redirect(w, r, "http://localhost:5173/verification", http.StatusSeeOther)
+	http.Redirect(resp, req, "http://localhost:5173/verification", http.StatusSeeOther)
 }
 
-// func PostTweetHandler(message string, blogId string, userToken *oauth1.Token) error {
-
-// 	client := twitterConfig.Client(oauth1.NoContext, userToken)
-
-// 	tweetURL := "https://api.twitter.com/1.1/statuses/update.json"
-// 	resp, err := client.PostForm(tweetURL, map[string][]string{"status": {message}})
-// 	if err != nil {
-// 		log.Printf("[ERROR] Failed to post tweet for the blog id : %s and the error is %s", blogId, err)
-// 		return err
-// 	}
-// 	defer resp.Body.Close()
-
-// 	if resp.StatusCode != http.StatusOK {
-// 		return errors.New("Failed to post tweet: " + resp.Status)
-// 	}
-
-// 	log.Printf("[INFO] Blog with ID %s shared on X(twitter) Successfully", blogId)
-// 	return nil
-// }
-
-func ConnectLinkedInHandler(w http.ResponseWriter, r *http.Request) {
-	userId, err := ValidateLogin(r)
-	if err != nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+func ConnectLinkedInHandler(resp http.ResponseWriter, req *http.Request) {
+	userId, ok := req.Context().Value(middlewares.UserIDKey).(string)
+	if !ok {
+		http.Error(resp, "Unauthorized: User ID not found", http.StatusUnauthorized)
 		return
 	}
 	user, err := repo.GetUserById(userId)
@@ -710,64 +543,86 @@ func ConnectLinkedInHandler(w http.ResponseWriter, r *http.Request) {
 	err = repo.SetCache(state, userId, 10*time.Minute)
 	if err != nil {
 		log.Printf("[ERROR] Failed to store state in cache: %v", err)
-		http.Error(w, "Failed to store state in cache", http.StatusInternalServerError)
+		http.Error(resp, "Failed to store state in cache", http.StatusInternalServerError)
 		return
 	}
+	expiration := time.Now().Add(10*time.Minute)
 
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(resp, &http.Cookie{
 		Name:     "oauth_state",
 		Value:    state,
 		HttpOnly: true,
 		Path:     "/",
 		Secure:   false,
+		Expires: expiration,
 	})
 
 	authURL := linkedinConfig.AuthCodeURL(state)
-	http.Redirect(w, r, authURL, http.StatusFound)
+	http.Redirect(resp, req, authURL, http.StatusFound)
 }
 
-func LinkedCallbackHandler(w http.ResponseWriter, r *http.Request) {
-	queryState := r.URL.Query().Get("state")
-	stateCookie, err := r.Cookie("oauth_state")
+func LinkedCallbackHandler(resp http.ResponseWriter, req *http.Request) {
+	queryState := req.URL.Query().Get("state")
+	stateCookie, err := req.Cookie("oauth_state")
+	log.Printf("State cookie: %v", stateCookie)
+
+	if stateCookie == nil {
+		log.Printf("[ERROR] Missing state cookie")
+	}
 	if err != nil || stateCookie.Value != queryState {
 		log.Printf("[ERROR] Invalid state parameter")
-		http.Error(w, "Invalid state parameter", http.StatusForbidden)
+		http.Error(resp, "Invalid state parameter", http.StatusForbidden)
 		return
 	}
-	userId, exists := repo.GetCache(stateCookie.Value)
+	cacheItem, exists := repo.GetCache(stateCookie.Value)
 	if !exists {
 		log.Printf("[ERROR] Invalid state parameter")
-		http.Error(w, "Invalid state parameter", http.StatusForbidden)
+		http.Error(resp, "Invalid state parameter", http.StatusForbidden)
 		return
 	}
+	
+	userId, ok := cacheItem.(models.CacheItem)
+	if !ok {
+		log.Printf("[ERROR] Failed to cast cached item to CacheItem")
+		http.Error(resp, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	
+	userIdStr, ok := userId.Value.(string)
+	if !ok {
+		log.Printf("[ERROR] Failed to cast CacheItem.Value to string")
+		http.Error(resp, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	
 	err = repo.DeleteCache(stateCookie.Value)
 	if err != nil {
 		log.Printf("[WARN] Failed to delete state from cache for the user id: %s and error is %s", userId, err)
 	}
 
-	user, err := repo.GetUserById(userId.(string))
+	user, err := repo.GetUserById(userIdStr)
 	if err != nil {
 		log.Printf("[ERROR] Failed to get user for the id: %s and error is %s", userId, err)
-		http.Error(w, "User not found", http.StatusNotFound)
+		http.Error(resp, "User not found", http.StatusNotFound)
 		return
 	}
 	if user == nil {
 		log.Printf("[ERROR] User with id: %s not found", userId)
-		http.Error(w, "User not found", http.StatusNotFound)
+		http.Error(resp, "User not found", http.StatusNotFound)
 		return
 	}
 
-	code := r.URL.Query().Get("code")
+	code := req.URL.Query().Get("code")
 	if code == "" {
 		log.Printf("[ERROR] Missing authorization code")
-		http.Error(w, "Missing authorization code", http.StatusBadRequest)
+		http.Error(resp, "Missing authorization code", http.StatusBadRequest)
 		return
 	}
 
 	ctx := context.Background()
 	token, err := linkedinConfig.Exchange(ctx, code)
 	if err != nil {
-		http.Error(w, "Failed to exchange token: "+err.Error(), http.StatusInternalServerError)
+		http.Error(resp, "Failed to exchange token: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	user.LinkedInOauthKey = token.AccessToken
@@ -777,16 +632,16 @@ func LinkedCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		user.Verified = false
 	}
-	err = repo.UpdateUser(userId.(string), user)
+	err = repo.UpdateUser(userIdStr, user)
 	if err != nil {
 		log.Printf("[ERROR] Failed to update user with id: %s and error is %s", userId, err)
-		http.Error(w, "Failed to update user", http.StatusInternalServerError)
+		http.Error(resp, "Failed to update user", http.StatusInternalServerError)
 		return
 	}
-	log.Printf("[INFO] User with ID %s connected to LinkedIn Successfully", user.Id)
+	log.Printf("[INFO] User with ID %s connected to LinkedIn Successfully", userIdStr)
 
 	// Redirect the user back to the frontend
-	http.Redirect(w, r, "http://localhost:5173/verification", http.StatusSeeOther)
+	http.Redirect(resp, req, "http://localhost:5173/verification", http.StatusSeeOther)
 }
 
 
@@ -820,9 +675,9 @@ func ValidateLogin(req *http.Request) (string, error) {
 
 func VerifyHashnodeHandler(w http.ResponseWriter, r *http.Request) {
 	endpoint := "https://gql.hashnode.com"
-	userId, err := ValidateLogin(r)
-	if err != nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+	userId, ok := r.Context().Value(middlewares.UserIDKey).(string)
+	if !ok {
+		http.Error(w, "Unauthorized: User ID not found", http.StatusUnauthorized)
 		return
 	}
 	user, err := repo.GetUserById(userId)
@@ -922,10 +777,10 @@ func VerifyHashnodeHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(`{"success": true}`))
 }
 
-func ShareBlogHandler(w http.ResponseWriter, req *http.Request) {
-	userId, err := ValidateLogin(req)
-	if err != nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+func ShareBlogHandler(resp http.ResponseWriter, req *http.Request) {
+	userId, ok := req.Context().Value(middlewares.UserIDKey).(string)
+	if !ok {
+		http.Error(resp, "Unauthorized: User ID not found", http.StatusUnauthorized)
 		return
 	}
 	user, err := repo.GetUserById(userId)
@@ -938,7 +793,7 @@ func ShareBlogHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	if !user.Verified {
-		http.Error(w, "User is not verified", http.StatusForbidden)
+		http.Error(resp, "User is not verified", http.StatusForbidden)
 		return
 	}
 
@@ -947,74 +802,74 @@ func ShareBlogHandler(w http.ResponseWriter, req *http.Request) {
 		Platforms []string `json:"platforms"`
 	}
 	if err := json.NewDecoder(req.Body).Decode(&requestBody); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		http.Error(resp, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
 	blogId := requestBody.Id
 	if len(blogId) == 0 {
-		w.WriteHeader(401)
-		w.Write([]byte(`{"success": false, "reason": "missing blog id in the request"}`))
+		resp.WriteHeader(401)
+		resp.Write([]byte(`{"success": false, "reason": "missing blog id in the request"}`))
 		return
 	}
 
 	err = services.ProcessSharedBlog(user, blogId, requestBody.Platforms)
 	if err != nil {
 		log.Printf("[ERROR] Failed to share blog: %v", err)
-		http.Error(w, "Failed to share blog", http.StatusInternalServerError)
+		http.Error(resp, "Failed to share blog", http.StatusInternalServerError)
 		return
 	}
 	log.Printf("[INFO] Blog with ID %s shared successfully by user with ID %s", blogId, userId)
 
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"success": true}`))
+	resp.WriteHeader(http.StatusOK)
+	resp.Write([]byte(`{"success": true}`))
 }
 
-func ScheduleBlogHandler(w http.ResponseWriter, r *http.Request) {
-	userId, err := ValidateLogin(r)
-	if err != nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+func ScheduleBlogHandler(resp http.ResponseWriter, req *http.Request) {
+	userId, ok := req.Context().Value(middlewares.UserIDKey).(string)
+	if !ok {
+		http.Error(resp, "Unauthorized: User ID not found", http.StatusUnauthorized)
 		return
 	}
 	user, err := repo.GetUserById(userId)
 	if err != nil {
 		log.Printf("[ERROR] Failed to get user for the id: %s and error is %s", userId, err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		http.Error(resp, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 	if user == nil {
 		log.Printf("[ERROR] User with id: %s not found", userId)
-		http.Error(w, "User not found", http.StatusNotFound)
+		http.Error(resp, "User not found", http.StatusNotFound)
 		return
 	}
 	if !user.Verified {
 		log.Printf("[ERROR] User with id: %s is not verified", userId)
-		http.Error(w, "User is not verified", http.StatusForbidden)
+		http.Error(resp, "User is not verified", http.StatusForbidden)
 		return
 	}
 	var blogData models.ScheduledBlogData
-	err = json.NewDecoder(r.Body).Decode(&blogData)
+	err = json.NewDecoder(req.Body).Decode(&blogData)
 	if err != nil {
-		http.Error(w, "Failed to parse JSON", http.StatusBadRequest)
+		http.Error(resp, "Failed to parse JSON", http.StatusBadRequest)
 		return
 	}
 	blogData.UserID = userId
 	err = blogData.ScheduledBlog.Validate()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(resp, err.Error(), http.StatusBadRequest)
 		return
 	}
 	//check if the user has already scheduled the blog
 	for i := range user.ScheduledBlogs {
 		if user.ScheduledBlogs[i].Id == blogData.ScheduledBlog.Id {
-			http.Error(w, "Blog already scheduled", http.StatusBadRequest)
+			http.Error(resp, "Blog already scheduled", http.StatusBadRequest)
 			return
 		}
 	}
 
 	err = taskScheduler.AddTask(blogData)
 	if err != nil {
-		http.Error(w, "Failed to store scheduled task", http.StatusInternalServerError)
+		http.Error(resp, "Failed to store scheduled task", http.StatusInternalServerError)
 		return
 	}
 
@@ -1022,48 +877,48 @@ func ScheduleBlogHandler(w http.ResponseWriter, r *http.Request) {
 	err = repo.UpdateUser(userId, user)
 	if err != nil {
 		log.Printf("[ERROR] Failed to update user with id: %s and error is %s", userId, err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		http.Error(resp, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
 	log.Printf("[INFO] Blog with ID %s scheduled successfully by user with ID %s", blogData.ScheduledBlog.Id, userId)
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"success": true}`))
+	resp.WriteHeader(http.StatusOK)
+	resp.Write([]byte(`{"success": true}`))
 
 }
 
-func CancelScheduledBlogHandler(w http.ResponseWriter, r *http.Request) {
-	userId, err := ValidateLogin(r)
-	if err != nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+func CancelScheduledBlogHandler(resp http.ResponseWriter, req *http.Request) {
+	userId, ok := req.Context().Value(middlewares.UserIDKey).(string)
+	if !ok {
+		http.Error(resp, "Unauthorized: User ID not found", http.StatusUnauthorized)
 		return
 	}
 	user, err := repo.GetUserById(userId)
 	if err != nil {
 		log.Printf("[ERROR] Failed to get user for the id: %s and error is %s", userId, err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		http.Error(resp, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 	if user == nil {
 		log.Printf("[ERROR] User with id: %s not found", userId)
-		http.Error(w, "User not found", http.StatusNotFound)
+		http.Error(resp, "User not found", http.StatusNotFound)
 		return
 	}
 	if !user.Verified {
 		log.Printf("[ERROR] User with id: %s is not verified", userId)
-		http.Error(w, "User is not verified", http.StatusForbidden)
+		http.Error(resp, "User is not verified", http.StatusForbidden)
 		return
 	}
 	var requestBody struct {
 		Id string `json:"id"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+	if err := json.NewDecoder(req.Body).Decode(&requestBody); err != nil {
+		http.Error(resp, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 	blogId := requestBody.Id
 	if len(blogId) == 0 {
-		http.Error(w, "Missing blog id", http.StatusBadRequest)
+		http.Error(resp, "Missing blog id", http.StatusBadRequest)
 		return
 	}
 	var updatedScheduledBlogs []models.ScheduledBlog
@@ -1078,88 +933,112 @@ func CancelScheduledBlogHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 
 		log.Printf("[ERROR] Failed to update user with id: %s and error is %s", userId, err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		http.Error(resp, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 	err = taskScheduler.RemoveTask(blogId)
 	if err != nil {
 		log.Printf("[ERROR] Failed to remove scheduled task with id: %s and error is %s", blogId, err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		http.Error(resp, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 	log.Printf("[INFO] Scheduled blog with ID %s cancelled successfully by user with ID %s", blogId, userId)
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"success": true}`))
+	resp.WriteHeader(http.StatusOK)
+	resp.Write([]byte(`{"success": true}`))
 }
 
-func VerifyEmailHandler(w http.ResponseWriter, r *http.Request) {
-	userId, err := ValidateLogin(r)
-	if err != nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+func VerifyEmailHandler(resp http.ResponseWriter, req *http.Request) {
+	if req.Body == nil {
+		resp.Header().Set("Content-Type", "application/json")
+		resp.WriteHeader(http.StatusBadRequest)
+		resp.Write([]byte(`{"success": false, "message": "Request body is empty"}`))
 		return
 	}
+
+	userId, err := ValidateLogin(req)
+	if err != nil {
+		resp.Header().Set("Content-Type", "application/json")
+		resp.WriteHeader(http.StatusUnauthorized)
+		resp.Write([]byte(`{"success": false, "message": "Unauthorized"}`))
+		return
+	}
+
 	user, err := repo.GetUserById(userId)
 	if err != nil {
-		log.Printf("[ERROR] Failed to get user for the id: %s and error is %s", userId, err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		log.Printf("[ERROR] Failed to get user for id %s: %v", userId, err)
+		resp.WriteHeader(http.StatusInternalServerError)
+		resp.Write([]byte(`{"success": false, "message": "Internal server error"}`))
 		return
 	}
 	if user == nil {
-		log.Printf("[ERROR] User with id: %s not found", userId)
-		http.Error(w, "User not found", http.StatusNotFound)
+		log.Printf("[ERROR] User with id %s not found", userId)
+		resp.WriteHeader(http.StatusNotFound)
+		resp.Write([]byte(`{"success": false, "message": "User not found"}`))
 		return
 	}
 
 	var requestBody struct {
 		Otp string `json:"otp"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+	if err := json.NewDecoder(req.Body).Decode(&requestBody); err != nil {
+		resp.WriteHeader(http.StatusBadRequest)
+		resp.Write([]byte(`{"success": false, "message": "Invalid request body"}`))
 		return
 	}
-	// get the otp from the cache
+
 	cacheKey := fmt.Sprintf("email_otp_%s", userId)
-	cachedOtp, exists := repo.GetCache(cacheKey)
+	cachedItem, exists := repo.GetCache(cacheKey)
 	if !exists {
-		http.Error(w, "OTP expired", http.StatusBadRequest)
+		resp.WriteHeader(http.StatusGone)
+		resp.Write([]byte(`{"success": false, "message": "OTP expired"}`))
 		return
 	}
+	cachedOtp := cachedItem.(models.CacheItem).Value.(string)
 	if cachedOtp != requestBody.Otp {
-		http.Error(w, "Invalid OTP", http.StatusBadRequest)
+		resp.WriteHeader(http.StatusBadRequest)
+		resp.Write([]byte(`{"success": false, "message": "Invalid OTP"}`))
 		return
 	}
+
 	user.EmailVerified = true
-	if (user.XVerified || user.LinkedinVerified) && user.HashnodeVerified  && user.EmailVerified {
+	if (user.XVerified || user.LinkedinVerified) && user.HashnodeVerified && user.EmailVerified {
 		user.Verified = true
 	} else {
 		user.Verified = false
 	}
-	err = repo.UpdateUser(userId, user)
-	if err != nil {
-		log.Printf("[ERROR] Failed to update user with id: %s and error is %s", userId, err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	if err := repo.UpdateUser(userId, user); err != nil {
+		log.Printf("[ERROR] Failed to update user with id %s: %v", userId, err)
+		resp.WriteHeader(http.StatusInternalServerError)
+		resp.Write([]byte(`{"success": false, "message": "Internal server error"}`))
 		return
 	}
+
+	//delete the otp from the cache
+	if err := repo.DeleteCache(cacheKey); err != nil {
+		log.Printf("[ERROR] Failed to delete OTP from cache for user with id %s: %v", userId, err)
+	}
+
 	log.Printf("[INFO] User with ID %s verified email successfully", userId)
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"success": true}`))
+	resp.WriteHeader(http.StatusOK)
+	resp.Write([]byte(`{"success": true, "message": "Email verified successfully"}`))
 }
 
-func ResetEmailOtpHandler(w http.ResponseWriter, r *http.Request) {
-	userId, err := ValidateLogin(r)
-	if err != nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+
+func ResetEmailOtpHandler(resp http.ResponseWriter, req *http.Request) {
+	userId, ok := req.Context().Value(middlewares.UserIDKey).(string)
+	if !ok {
+		http.Error(resp, "Unauthorized: User ID not found", http.StatusUnauthorized)
 		return
 	}
 	user, err := repo.GetUserById(userId)
 	if err != nil {
 		log.Printf("[ERROR] Failed to get user for the id: %s and error is %s", userId, err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		http.Error(resp, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 	if user == nil {
 		log.Printf("[ERROR] User with id: %s not found", userId)
-		http.Error(w, "User not found", http.StatusNotFound)
+		http.Error(resp, "User not found", http.StatusNotFound)
 		return
 	}
 	// delete the old otp
@@ -1169,174 +1048,148 @@ func ResetEmailOtpHandler(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[ERROR] Failed to delete old OTP for the user id: %s and error is %s", userId, err)
 	}
 	// generate new otp
-	otp := fmt.Sprintf("%06d", rand.Intn(1000000))
-	err = repo.SetCache(cacheKey, otp, 5*time.Minute)
+	otp := services.GenerateOTP()
+	err = repo.SetCache(cacheKey, otp, 30*time.Minute)
 	if err != nil {
 		log.Printf("[ERROR] Failed to store new OTP for the user id: %s and error is %s", userId, err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		http.Error(resp, "Internal server error", http.StatusInternalServerError)
 		return
 	}
-	log.Printf("[INFO] New OTP generated for the user with ID %s", userId)
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"success": true}`))
+
+	message := fmt.Sprintf("Your OTP is: %s\n OTP will expire in 30 minutes", otp)
+
+	if err := services.SendEmail(user.UserName, message); err != nil {
+		log.Printf("[ERROR] Sending OTP email to %s: %v", user.UserName, err)
+		http.Error(resp, `{"error": "Failed to send verification email"}`, http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("[INFO] New Email verification OTP generated for the user with ID %s", userId)
+	resp.WriteHeader(http.StatusOK)
+	resp.Write([]byte(`{"success": true}`))
 }
 
-// func VerifyHashnodeHandler(w http.ResponseWriter, r *http.Request) {
-// 	endpoint := "https://gql.hashnode.com"
-// 	userId, err := ValidateLogin(r)
-// 	if err != nil {
-// 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-// 		return
-// 	}
-// 	user, err := repo.GetUserById(userId)
-// 	if err != nil {
-// 		log.Printf("[ERROR] Failed to get user for the id: %s and error is %s", userId, err)
-// 		return
-// 	}
-// 	if user == nil {
-// 		log.Printf("[ERROR] User with id: %s not found", userId)
-// 		return
-// 	}
+func ForgotPasswordHandler(resp http.ResponseWriter, req *http.Request) {
+	var requestBody struct {
+		Email string `json:"email"`
+	}
+	if err := json.NewDecoder(req.Body).Decode(&requestBody); err != nil {
+		http.Error(resp, "Invalid request body", http.StatusBadRequest)
+		return
+	}
 
-// 	var hashnodeKey models.HashnodeKey
-// 	err = json.NewDecoder(r.Body).Decode(&hashnodeKey)
-// 	if err != nil {
-// 		http.Error(w, "Failed to parse JSON", http.StatusBadRequest)
-// 		return
-// 	}
-// 	if hashnodeKey.Key == "" {
-// 		http.Error(w, "Missing Hashnode API key", http.StatusBadRequest)
-// 		return
-// 	}
+	user, err := repo.GetUserByName(requestBody.Email)
+	if err != nil {
+		log.Println("[ERROR] Failed to retrieve user:", err)
+		http.Error(resp, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	if user == nil {
+		http.Error(resp, "User not found", http.StatusNotFound)
+		return
+	}
+	userId := user.Id.Hex()
 
-// 	query := `{"query":"query Me { me { publications(first:1) { edges { node { url id } } } } }"}`
+	otp := services.GenerateOTP()
+	hashedOtp, err := bcrypt.GenerateFromPassword([]byte(otp), bcrypt.DefaultCost)
+	if err != nil {
+		log.Printf("[ERROR] Failed to hash OTP for user %s: %v", userId, err)
+		http.Error(resp, "Internal server error", http.StatusInternalServerError)
+		return
+	}
 
-// 	req, err := http.NewRequest("POST", endpoint, bytes.NewBuffer([]byte(query)))
-// 	if err != nil {
-// 		http.Error(w, "Failed to create request", http.StatusInternalServerError)
-// 		return
-// 	}
-// 	req.Header.Set("Content-Type", "application/json")
-// 	req.Header.Set("Authorization", hashnodeKey.Key)
+	cacheKey := fmt.Sprintf("password_reset_%s", userId)
+	if err = repo.DeleteCache(cacheKey); err != nil {
+		log.Printf("[WARNING] Failed to delete old OTP for user %s: %v", userId, err)
+	}
 
-// 	resp, err := http.DefaultClient.Do(req)
-// 	if err != nil {
-// 		http.Error(w, "Failed to make request", http.StatusInternalServerError)
-// 		return
-// 	}
-// 	defer resp.Body.Close()
+	if err = repo.SetCache(cacheKey, string(hashedOtp), 10*time.Minute); err != nil {
+		log.Printf("[ERROR] Failed to store OTP for user %s: %v", userId, err)
+		http.Error(resp, "Internal server error", http.StatusInternalServerError)
+		return
+	}
 
-// 	if resp.StatusCode != http.StatusOK {
-// 		http.Error(w, "Invalid Hashnode API key", http.StatusUnauthorized)
-// 		return
-// 	}
+	message := fmt.Sprintf("Your OTP for password reset is: %s\n(Expires in 10 minutes)", otp)
+	if err = services.SendEmail(user.UserName, message); err != nil {
+		log.Printf("[ERROR] Failed to send email to user %s: %v", userId, err)
+		http.Error(resp, "Failed to send email", http.StatusInternalServerError)
+		return
+	}
 
-// 	body, err := io.ReadAll(resp.Body)
-// 	if err != nil {
-// 		http.Error(w, "Failed to read response", http.StatusInternalServerError)
-// 		return
-// 	}
+	log.Printf("[INFO] Password reset OTP sent successfully for user %s", userId)
+	resp.Header().Set("Content-Type", "application/json")
+	resp.WriteHeader(http.StatusOK)
+	resp.Write([]byte(`{"success": true}`))
+}
 
-// 	var response struct {
-// 		Data struct {
-// 			Me struct {
-// 				Publications struct {
-// 					Edges []struct {
-// 						Node struct {
-// 							URL string `json:"url"`
-// 							ID  string `json:"id"`
-// 						} `json:"node"`
-// 					} `json:"edges"`
-// 				} `json:"publications"`
-// 			} `json:"me"`
-// 		} `json:"data"`
-// 	}
-// 	if err := json.Unmarshal(body, &response); err != nil {
-// 		http.Error(w, "Failed to parse response JSON", http.StatusInternalServerError)
-// 		return
-// 	}
+func ResetPasswordHandler(resp http.ResponseWriter, req *http.Request) {
+	var requestBody struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+		Otp      string `json:"otp"`
+	}
+	if err := json.NewDecoder(req.Body).Decode(&requestBody); err != nil {
+		http.Error(resp, "Invalid request body", http.StatusBadRequest)
+		return
+	}
 
-// 	// Check if we have at least one publication
-// 	if len(response.Data.Me.Publications.Edges) == 0 {
-// 		http.Error(w, "No publications found", http.StatusNotFound)
-// 		return
-// 	}
+	if len(requestBody.Password) < 8 || len(requestBody.Password) > 64 {
+		http.Error(resp, "Password must be between 8 and 64 characters", http.StatusBadRequest)
+		return
+	}
 
-// 	// Extract `url` and `id`
-// 	node := response.Data.Me.Publications.Edges[0].Node
-// 	url :=  strings.ReplaceAll(node.URL, "https://", "")
-// 	id := node.ID
+	user, err := repo.GetUserByName(requestBody.Email)
+	if err != nil {
+		log.Println("[ERROR] Failed to retrieve user:", err)
+		http.Error(resp, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	if user == nil {
+		http.Error(resp, "User not found", http.StatusNotFound)
+		return
+	}
+	userId := user.Id.Hex()
+	cacheKey := fmt.Sprintf("password_reset_%s", userId)
+	cachedData, exists := repo.GetCache(cacheKey)
+	if !exists {
+		log.Printf("[ERROR] OTP expired or missing for user %s", userId)
+		http.Error(resp, "OTP expired", http.StatusGone)
+		return
+	}
 
-// 	// create a webhook for the user
-//     webhookUrl := fmt.Sprintf("https://localhost:9696/api/v1/user/webhook/%s", userId)
+	cachedOtp, ok := cachedData.(models.CacheItem).Value.(string)
+	if !ok {
+		log.Printf("[ERROR] OTP stored in cache has invalid format for user %s", userId)
+		http.Error(resp, "Internal server error", http.StatusInternalServerError)
+		return
+	}
 
-// 	webhookInput := fmt.Sprintf(`{
-// 		"publicationId": %s,
-// 		"url": %s,
-// 		"events": ["POST_PUBLISHED"],
-// 		"secret": %s,
-// 	  }`, id, webhookUrl, userId)
+	if err = bcrypt.CompareHashAndPassword([]byte(cachedOtp), []byte(requestBody.Otp)); err != nil {
+		log.Printf("[ERROR] Invalid OTP provided for user %s", userId)
+		http.Error(resp, "Invalid OTP", http.StatusBadRequest)
+		return
+	}
 
-// 	queryStruct := models.GraphQLQuery{
-// 		Query: fmt.Sprintf(`mutation CreateWebhook(input: /"%s/") {
-// 		createWebhook(input: /"%s/") {
-// 		  webhook {
-// 			id
-// 			url
-// 			events
-// 			secret
-// 			createdAt
-// 		  }
-// 		}
-// 	  }`, webhookInput, webhookInput),
-// 	  }
-// 	queryBytes, err := json.Marshal(queryStruct)
-// 	if err != nil {
-// 		http.Error(w, "Failed to marshal query", http.StatusInternalServerError)
-// 		return
-// 	}
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(requestBody.Password), bcrypt.DefaultCost)
+	if err != nil {
+		log.Printf("[ERROR] Failed to hash password for user %s: %v", userId, err)
+		http.Error(resp, "Internal server error", http.StatusInternalServerError)
+		return
+	}
 
-// 	req, err = http.NewRequest("POST", endpoint, queryBytes)
-// 	if err != nil {
-// 		http.Error(w, "Failed to create request", http.StatusInternalServerError)
-// 		return
-// 	}
-// 	req.Header.Set("Content-Type", "application/json")
-// 	req.Header.Set("Authorization", hashnodeKey.Key)
+	user.PassWord = string(hashedPassword)
+	if err = repo.UpdateUser(userId, user); err != nil {
+		log.Printf("[ERROR] Failed to update password for user %s: %v", userId, err)
+		http.Error(resp, "Internal server error", http.StatusInternalServerError)
+		return
+	}
 
-// 	resp, err = http.DefaultClient.Do(req)
-// 	if err != nil {
-// 		http.Error(w, "Failed to make request", http.StatusInternalServerError)
-// 		return
-// 	}
-// 	defer resp.Body.Close()
+	if err = repo.DeleteCache(cacheKey); err != nil {
+		log.Printf("[WARNING] Failed to delete OTP for user %s: %v", userId, err)
+	}
 
-// 	if resp.StatusCode != http.StatusOK {
-// 		http.Error(w, "Invalid Hashnode API key", http.StatusUnauthorized)
-// 		return
-// 	}
-
-// 	body, err = io.ReadAll(resp.Body)
-// 	if err != nil {
-// 		http.Error(w, "Failed to read response", http.StatusInternalServerError)
-// 		return
-// 	}
-
-// 	// Update the user with the Hashnode API key
-// 	user.HashnodePAT = hashnodeKey.Key
-// 	user.HashnodeVerified = true
-// 	user.HashnodeBlog = url
-// 	user.WebHookUrl = webhookUrl
-// 	if (user.XVerified || user.LinkedinVerified) && user.EmailVerified && user.HashnodeVerified {
-// 		user.Verified = true
-// 	} else {
-// 		user.Verified = false
-// 	}
-// 	err = repo.UpdateUser(userId, user)
-// 	if err != nil {
-// 		log.Printf("[ERROR] Failed to update user with id: %s and error is %s", userId, err)
-// 		return
-// 	}
-// 	w.WriteHeader(http.StatusOK)
-// 	fmt.Fprintf(w, `{"success": true, "url": "%s", "id": "%s"}`, url, id)
-// }
+	log.Printf("[INFO] Password reset successfully for user %s", userId)
+	resp.Header().Set("Content-Type", "application/json")
+	resp.WriteHeader(http.StatusOK)
+	resp.Write([]byte(`{"success": true}`))
+}
