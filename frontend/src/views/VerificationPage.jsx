@@ -9,11 +9,12 @@ import {
 import TwitterIcon from "@mui/icons-material/Twitter";
 import LinkedInIcon from "@mui/icons-material/LinkedIn";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import { toast } from 'react-toastify';
 
 const VerificationPage = ({user, setUser}) => {
   const [twitterConnected, ] = useState(user?.x_verified);
   const [linkedinConnected, ] = useState(user?.linkedin_verified);
-  const [hashnodeVerified, ] = useState(user?.hashnode_verified);
+  const [hashnodeVerified, setHashnodeVerified] = useState(user?.hashnode_verified);
   const [hashnodeApiKey, setHashnodeApiKey] = useState("");
   const [disabled, setDisabled] = useState(true);
   const [emailVerified, setEmailVerified] = useState(user?.email_verified);
@@ -49,7 +50,7 @@ const VerificationPage = ({user, setUser}) => {
       if (response.ok) {
         user.hashnode_verified = true
         setUser(user);
-        setIsLoggedIn(true);
+        setHashnodeVerified(true);
       }
     } catch (error) {
       console.error('Error fetching user info:', error);
@@ -58,21 +59,59 @@ const VerificationPage = ({user, setUser}) => {
     }
   };
 
-  const handleOtpVerify = () => {
-    // Simulate OTP verification
-    if (otp === "123456") {
-        setEmailVerified(true);
-      setOtpStatus("success");
-    } else {
-      setOtpStatus("failed");
+  const handleOtpVerify = async () => {
+    if (otp === "") {
+      toast.error("Please enter OTP");
+      return;
     }
-  };
+    try {
+      const response = await fetch('http://localhost:9696/api/v1/user/verify-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          otp,
+        }),
+        credentials: 'include',
+      });
+      if (response.ok) {
+        setEmailVerified(true);
+        setOtpStatus("success");
+      } else if (response.status === 400) {
+        setOtpStatus("failed");
+        toast.error("Invalid OTP, Please try again.");
+      } else if (response.status === 410) {
+        toast.error("OTP Expired, Please request a new OTP.");
+        setOtpStatus("failed");
+      } else {
+        toast.error("Something went wrong. Please try again later.");
+        setOtpStatus("failed");
+      }
 
-  const handleResendOtp = () => {
-    // Simulate OTP resend
-    setOtp("");
-    setOtpStatus(null);
+    } catch (error) {
+      console.error('Error Verifying OTP:', error);
+    } }
+
+  const handleResendOtp = async () => {
+
+    try {
+      const response = await fetch('http://localhost:9696/api/v1/user/resend-otp', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      });
+      if (response.ok) {
+        toast.success("OTP sent successfully");
+      } else {
+        toast.error("Failed to send OTP");
+      }
+    } catch (error) {
+      toast.error("Failed to send OTP");
   };
+  }
   
   const handleNext = () => {
     setUser({
