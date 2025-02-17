@@ -36,6 +36,9 @@ const Login = ({ open, handleClose, setUser, setIsLoggedIn }) => {
         }
       } else if (response.status === 400) {
         setError(data.reason || 'Failed to login');
+      } else if (response.status === 429) {
+        setError(data.reason || 'Too Many Requests');
+        toast.error('Too many requests. Wait for 1 minute before trying again');
       }
     } catch (err) {
       toast.error('Error during login');
@@ -61,6 +64,9 @@ const Login = ({ open, handleClose, setUser, setIsLoggedIn }) => {
       if (response.ok) {
         toast.success('OTP sent successfully');
         setForgotMode(true);
+      }  else if (response.status === 429) {
+        setError(data.reason || 'Too Many Requests');
+        toast.error('Too many requests. Wait for 1 minute before trying again');
       } else {
         const data = await response.json();
         toast.error(data.message || 'Failed to send OTP');
@@ -97,6 +103,11 @@ const Login = ({ open, handleClose, setUser, setIsLoggedIn }) => {
         toast.error('OTP expired');
         return;
       }
+      if (response.status === 429) {
+        setError(data.reason || 'Too Many Requests');
+        toast.error('Too many requests. Wait for 1 minute before trying again');
+        return;
+      }
       if (response.ok) {
         toast.success('Password reset successfully');
         setForgotMode(false);
@@ -124,6 +135,9 @@ const Login = ({ open, handleClose, setUser, setIsLoggedIn }) => {
       });
       if (response.ok) {
         toast.success('OTP resent successfully');
+      }  else if (response.status === 429) {
+        setError(data.reason || 'Too Many Requests');
+        toast.error('Too many requests. Wait for 1 minute before trying again');
       } else {
         const data = await response.json();
         toast.error(data.message || 'Failed to resend OTP');
