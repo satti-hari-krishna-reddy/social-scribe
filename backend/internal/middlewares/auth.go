@@ -12,7 +12,7 @@ import (
 
 type contextKey string
 
-const userIDKey contextKey = "userID"
+const UserIDKey contextKey = "userID"
 
 // AuthMiddleware handles authentication and rate limiting
 func AuthMiddleware(limit int, duration time.Duration, next http.Handler) http.Handler {
@@ -49,14 +49,12 @@ func AuthMiddleware(limit int, duration time.Duration, next http.Handler) http.H
 
 		userID := oid.Hex()
 
-		// Apply rate limiting per user
 		if repo.IsRateLimited(userID, limit, duration) {
 			http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
 			return
 		}
 
-		// Store userID in context and call next handler
-		ctx := context.WithValue(r.Context(), userIDKey, userID)
+		ctx := context.WithValue(r.Context(), UserIDKey, userID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
