@@ -15,11 +15,21 @@ func RegisterRoutes() *mux.Router {
 	apiV1 := router.PathPrefix("/api/v1").Subrouter()
 
 	// Unprotected routes
-	apiV1.HandleFunc("/user/signup", handlers.SignupUserHandler).Methods(http.MethodPost, http.MethodOptions)
-	apiV1.HandleFunc("/user/login", handlers.LoginUserHandler).Methods(http.MethodPost, http.MethodOptions)
-	apiV1.HandleFunc("/user/linkedin-callback", handlers.LinkedCallbackHandler).Methods(http.MethodGet, http.MethodOptions)
-	apiV1.HandleFunc("/user/forgot-password", handlers.ForgotPasswordHandler).Methods(http.MethodPost, http.MethodOptions)
-	apiV1.HandleFunc("/user/reset-password", handlers.ResetPasswordHandler).Methods(http.MethodPost, http.MethodOptions)
+	apiV1.Handle("/user/signup",
+		middlewares.IPRateLimitMiddleware(10, time.Minute)(http.HandlerFunc(handlers.SignupUserHandler)),
+	).Methods(http.MethodPost, http.MethodOptions)
+	apiV1.Handle("/user/login",
+		middlewares.IPRateLimitMiddleware(20, time.Minute)(http.HandlerFunc(handlers.LoginUserHandler)),
+	).Methods(http.MethodPost, http.MethodOptions)
+	apiV1.Handle("/user/linkedin-callback",
+		middlewares.IPRateLimitMiddleware(30, time.Minute)(http.HandlerFunc(handlers.LinkedCallbackHandler)),
+	).Methods(http.MethodGet, http.MethodOptions)
+	apiV1.Handle("/user/forgot-password",
+		middlewares.IPRateLimitMiddleware(5, time.Minute)(http.HandlerFunc(handlers.ForgotPasswordHandler)),
+	).Methods(http.MethodPost, http.MethodOptions)
+	apiV1.Handle("/user/reset-password",
+		middlewares.IPRateLimitMiddleware(5, time.Minute)(http.HandlerFunc(handlers.ResetPasswordHandler)),
+	).Methods(http.MethodPost, http.MethodOptions)
 
 	// Protected routes with rate limiting
 	apiV1.Handle("/user/blogs",
