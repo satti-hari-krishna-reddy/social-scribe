@@ -15,14 +15,13 @@ func RegisterRoutes() *mux.Router {
 	apiV1 := router.PathPrefix("/api/v1").Subrouter()
 
 	// Unprotected routes
-	apiV1.HandleFunc("/user/signup", handlers.SignupUserHandler).Methods(http.MethodPost)
-	apiV1.HandleFunc("/user/login", handlers.LoginUserHandler).Methods(http.MethodPost)
-	apiV1.HandleFunc("/user/getinfo", handlers.GetUserInfoHandler).Methods(http.MethodGet)
-	// Protected routes with rate limiting
-	apiV1.Handle("/user/scheduled_posts",
-		middlewares.AuthMiddleware(100, time.Minute, http.HandlerFunc(handlers.GetUserScheduledBlogsHandler)),
-	).Methods(http.MethodGet, http.MethodOptions)
+	apiV1.HandleFunc("/user/signup", handlers.SignupUserHandler).Methods(http.MethodPost, http.MethodOptions)
+	apiV1.HandleFunc("/user/login", handlers.LoginUserHandler).Methods(http.MethodPost, http.MethodOptions)
+	apiV1.HandleFunc("/user/linkedin-callback", handlers.LinkedCallbackHandler).Methods(http.MethodGet, http.MethodOptions)
+	apiV1.HandleFunc("/user/forgot-password", handlers.ForgotPasswordHandler).Methods(http.MethodPost, http.MethodOptions)
+	apiV1.HandleFunc("/user/reset-password", handlers.ResetPasswordHandler).Methods(http.MethodPost, http.MethodOptions)
 
+	// Protected routes with rate limiting
 	apiV1.Handle("/user/blogs",
 		middlewares.AuthMiddleware(200, time.Minute, http.HandlerFunc(handlers.GetUserBlogsHandler)),
 	).Methods(http.MethodGet, http.MethodOptions)
@@ -39,17 +38,9 @@ func RegisterRoutes() *mux.Router {
 		middlewares.AuthMiddleware(6, time.Minute, http.HandlerFunc(handlers.ScheduleBlogHandler)),
 	).Methods(http.MethodPost, http.MethodOptions)
 
-	apiV1.Handle("/blogs/schedule/delete",
-		middlewares.AuthMiddleware(30, time.Minute, http.HandlerFunc(handlers.GetUserSharedBlogsHandler)),
-	).Methods(http.MethodDelete, http.MethodOptions)
-
 	apiV1.Handle("/blogs/user/share",
 		middlewares.AuthMiddleware(50, time.Minute, http.HandlerFunc(handlers.ShareBlogHandler)),
 	).Methods(http.MethodPost, http.MethodOptions)
-
-	apiV1.Handle("/blogs/user/shared-blogs",
-		middlewares.AuthMiddleware(100, time.Minute, http.HandlerFunc(handlers.GetUserSharedBlogsHandler)),
-	).Methods(http.MethodGet, http.MethodOptions)
 
 	apiV1.Handle("/user/scheduled-blogs/cancel",
 		middlewares.AuthMiddleware(40, time.Minute, http.HandlerFunc(handlers.CancelScheduledBlogHandler)),
@@ -67,8 +58,7 @@ func RegisterRoutes() *mux.Router {
 		middlewares.AuthMiddleware(15, time.Minute, http.HandlerFunc(handlers.ConnectLinkedInHandler)),
 	).Methods(http.MethodGet, http.MethodOptions)
 
-	apiV1.Handle("/user/linkedin-callback",
-		middlewares.AuthMiddleware(10, time.Minute, http.HandlerFunc(handlers.LinkedCallbackHandler)),
+	apiV1.Handle("/user/getinfo", middlewares.AuthMiddleware(15, time.Minute, http.HandlerFunc(handlers.GetUserInfoHandler)),
 	).Methods(http.MethodGet, http.MethodOptions)
 
 	apiV1.Handle("/user/verify-hashnode",
@@ -81,7 +71,7 @@ func RegisterRoutes() *mux.Router {
 
 	apiV1.Handle("/user/resend-otp",
 		middlewares.AuthMiddleware(5, time.Minute, http.HandlerFunc(handlers.ResetEmailOtpHandler)),
-	).Methods(http.MethodPost, http.MethodOptions)
+	).Methods(http.MethodGet, http.MethodOptions)
 
 	return router
 }
