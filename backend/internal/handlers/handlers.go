@@ -11,11 +11,11 @@ import (
 	"net/mail"
 	"os"
 
+	"social-scribe/backend/internal/middlewares"
 	"social-scribe/backend/internal/models"
 	repo "social-scribe/backend/internal/repositories"
 	"social-scribe/backend/internal/scheduler"
 	"social-scribe/backend/internal/services"
-	"social-scribe/backend/internal/middlewares"
 
 	"strings"
 	"time"
@@ -35,6 +35,9 @@ var twitterConfig = &oauth1.Config{}
 var linkedinConfig = &oauth2.Config{}
 
 func init() {
+	if os.Getenv("TEST_ENV") == "true" {
+		return // Skip loading .env in tests ?? Hmmm, is there a beter way ?
+	}
 	err := godotenv.Load("../../.env")
 	if err != nil {
 		log.Fatalf("Error loading .env file: %v", err)
@@ -62,7 +65,6 @@ var taskScheduler *scheduler.Scheduler
 func InitScheduler(s *scheduler.Scheduler) {
 	taskScheduler = s
 }
-
 
 func SignupUserHandler(resp http.ResponseWriter, req *http.Request) {
 	if req.Body == nil {
@@ -546,7 +548,7 @@ func ConnectLinkedInHandler(resp http.ResponseWriter, req *http.Request) {
 		http.Error(resp, "Failed to store state in cache", http.StatusInternalServerError)
 		return
 	}
-	expiration := time.Now().Add(10*time.Minute)
+	expiration := time.Now().Add(10 * time.Minute)
 
 	http.SetCookie(resp, &http.Cookie{
 		Name:     "oauth_state",
@@ -554,7 +556,7 @@ func ConnectLinkedInHandler(resp http.ResponseWriter, req *http.Request) {
 		HttpOnly: true,
 		Path:     "/",
 		Secure:   false,
-		Expires: expiration,
+		Expires:  expiration,
 	})
 
 	authURL := linkedinConfig.AuthCodeURL(state)
@@ -580,21 +582,21 @@ func LinkedCallbackHandler(resp http.ResponseWriter, req *http.Request) {
 		http.Error(resp, "Invalid state parameter", http.StatusForbidden)
 		return
 	}
-	
+
 	userId, ok := cacheItem.(models.CacheItem)
 	if !ok {
 		log.Printf("[ERROR] Failed to cast cached item to CacheItem")
 		http.Error(resp, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-	
+
 	userIdStr, ok := userId.Value.(string)
 	if !ok {
 		log.Printf("[ERROR] Failed to cast CacheItem.Value to string")
 		http.Error(resp, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-	
+
 	err = repo.DeleteCache(stateCookie.Value)
 	if err != nil {
 		log.Printf("[WARN] Failed to delete state from cache for the user id: %s and error is %s", userId, err)
@@ -643,7 +645,6 @@ func LinkedCallbackHandler(resp http.ResponseWriter, req *http.Request) {
 	// Redirect the user back to the frontend
 	http.Redirect(resp, req, "http://localhost:5173/verification", http.StatusSeeOther)
 }
-
 
 func ValidateLogin(req *http.Request) (string, error) {
 	cookie, err := req.Cookie("session_token")
@@ -1022,7 +1023,6 @@ func VerifyEmailHandler(resp http.ResponseWriter, req *http.Request) {
 	resp.WriteHeader(http.StatusOK)
 	resp.Write([]byte(`{"success": true, "message": "Email verified successfully"}`))
 }
-
 
 func ResetEmailOtpHandler(resp http.ResponseWriter, req *http.Request) {
 	userId, ok := req.Context().Value(middlewares.UserIDKey).(string)
