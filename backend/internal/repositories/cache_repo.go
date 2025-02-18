@@ -11,7 +11,11 @@ import (
 	"social-scribe/backend/internal/models"
 )
 
-func SetCache(key string, value interface{}, expiration time.Duration) error {
+var GetCache = defualtGetCache
+var SetCache = defualtSetCache
+var DeleteCache = defualtDeleteCache
+
+func defualtSetCache(key string, value interface{}, expiration time.Duration) error {
 	ctx := context.TODO()
 
 	item := models.CacheItem{
@@ -38,7 +42,7 @@ func SetCache(key string, value interface{}, expiration time.Duration) error {
 	return nil
 }
 
-func GetCache(key string) (interface{}, bool) {
+func defualtGetCache(key string) (interface{}, bool) {
 	ctx := context.TODO()
 
 	var result models.CacheItem
@@ -61,7 +65,7 @@ func GetCache(key string) (interface{}, bool) {
 	return result, true
 }
 
-func DeleteCache(key string) error {
+func defualtDeleteCache(key string) error {
 	ctx := context.TODO()
 
 	_, err := cacheCollection.DeleteOne(ctx, bson.M{"key": key})
