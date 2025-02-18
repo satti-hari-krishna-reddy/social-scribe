@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"time"
 
-	repo "social-scribe/backend/internal/repositories"
-	"social-scribe/backend/internal/models"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"social-scribe/backend/internal/models"
+	repo "social-scribe/backend/internal/repositories"
 )
 
 type contextKey string
