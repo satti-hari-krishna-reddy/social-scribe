@@ -1,4 +1,3 @@
-
 package utils
 
 import (
@@ -11,7 +10,7 @@ func GetClientIP(r *http.Request) string {
 	forwarded := r.Header.Get("X-Forwarded-For")
 	if forwarded != "" {
 		ips := strings.Split(forwarded, ",")
-		return strings.TrimSpace(ips[0]) 
+		return strings.TrimSpace(ips[0])
 	}
 
 	// Check X-Real-IP header
