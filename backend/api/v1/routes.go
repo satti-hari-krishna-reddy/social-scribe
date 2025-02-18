@@ -14,12 +14,12 @@ func RegisterRoutes() *mux.Router {
 	router := mux.NewRouter()
 	apiV1 := router.PathPrefix("/api/v1").Subrouter()
 
-	// Unprotected routes
+	// Unprotected routes with IP based rate limiting
 	apiV1.Handle("/user/signup",
 		middlewares.IPRateLimitMiddleware(10, time.Minute)(http.HandlerFunc(handlers.SignupUserHandler)),
 	).Methods(http.MethodPost, http.MethodOptions)
 	apiV1.Handle("/user/login",
-		middlewares.IPRateLimitMiddleware(20, time.Minute)(http.HandlerFunc(handlers.LoginUserHandler)),
+		middlewares.IPRateLimitMiddleware(10, time.Minute)(http.HandlerFunc(handlers.LoginUserHandler)),
 	).Methods(http.MethodPost, http.MethodOptions)
 	apiV1.Handle("/user/linkedin-callback",
 		middlewares.IPRateLimitMiddleware(30, time.Minute)(http.HandlerFunc(handlers.LinkedCallbackHandler)),
@@ -31,7 +31,7 @@ func RegisterRoutes() *mux.Router {
 		middlewares.IPRateLimitMiddleware(5, time.Minute)(http.HandlerFunc(handlers.ResetPasswordHandler)),
 	).Methods(http.MethodPost, http.MethodOptions)
 
-	// Protected routes with rate limiting
+	// Protected routes with user based rate limiting
 	apiV1.Handle("/user/blogs",
 		middlewares.AuthMiddleware(200, time.Minute, http.HandlerFunc(handlers.GetUserBlogsHandler)),
 	).Methods(http.MethodGet, http.MethodOptions)
@@ -68,8 +68,7 @@ func RegisterRoutes() *mux.Router {
 		middlewares.AuthMiddleware(15, time.Minute, http.HandlerFunc(handlers.ConnectLinkedInHandler)),
 	).Methods(http.MethodGet, http.MethodOptions)
 
-	apiV1.Handle("/user/getinfo", middlewares.AuthMiddleware(15, time.Minute, http.HandlerFunc(handlers.GetUserInfoHandler)),
-	).Methods(http.MethodGet, http.MethodOptions)
+	apiV1.Handle("/user/getinfo", middlewares.AuthMiddleware(15, time.Minute, http.HandlerFunc(handlers.GetUserInfoHandler))).Methods(http.MethodGet, http.MethodOptions)
 
 	apiV1.Handle("/user/verify-hashnode",
 		middlewares.AuthMiddleware(10, time.Minute, http.HandlerFunc(handlers.VerifyHashnodeHandler)),
