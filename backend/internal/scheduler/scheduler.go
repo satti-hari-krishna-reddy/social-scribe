@@ -270,7 +270,7 @@ func (s *Scheduler) RemoveTask(blogId string) error {
 		return err
 	}
 	select {
-	case s.newTaskCh <- struct{}{}:  // so we have to notify the agent to recheck the heap
+	case s.newTaskCh <- struct{}{}: // so we have to notify the agent to recheck the heap
 	default:
 	}
 	return nil
