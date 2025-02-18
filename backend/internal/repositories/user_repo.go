@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"social-scribe/backend/internal/models"
 
@@ -10,7 +11,14 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-func InsertUser(user models.User) (string, error) {
+var (
+	InsertUser    = defaultInsertUser
+	UpdateUser    = defaultUpdateUser
+	GetUserById   = defaultGetUserById
+	GetUserByName = defaultGetUserByName
+)
+
+func defaultInsertUser(user models.User) (string, error) {
 	ctx := context.TODO()
 
 	result, err := userCollection.InsertOne(ctx, user)
@@ -18,13 +26,19 @@ func InsertUser(user models.User) (string, error) {
 		log.Printf("[ERROR] Error inserting user: %v", err)
 		return "", err
 	}
-	id := result.InsertedID.(primitive.ObjectID).Hex()
-	return id, nil
+
+	// Try to convert the InsertedID to a primitive.ObjectID.
+	if oid, ok := result.InsertedID.(primitive.ObjectID); ok {
+		log.Printf("[INFO] Inserted user by converting into obj id with ID: %s", oid.Hex())
+		return oid.Hex(), nil
+	}
+	// Otherwise, fall back to returning the InsertedID as a string.
+	log.Printf("[INFO] Inserted user by using insertedid directly with ID: %s", result.InsertedID)
+	return fmt.Sprintf("%v", result.InsertedID), nil
 }
 
-func UpdateUser(userID string, updatedUser *models.User) error {
+func defaultUpdateUser(userID string, updatedUser *models.User) error {
 	ctx := context.TODO()
-
 	objID, err := primitive.ObjectIDFromHex(userID)
 	if err != nil {
 		return err
@@ -44,7 +58,7 @@ func UpdateUser(userID string, updatedUser *models.User) error {
 	return nil
 }
 
-func GetUserById(userID string) (*models.User, error) {
+func defaultGetUserById(userID string) (*models.User, error) {
 	ctx := context.TODO()
 
 	objID, err := primitive.ObjectIDFromHex(userID)
@@ -62,7 +76,7 @@ func GetUserById(userID string) (*models.User, error) {
 	return user, nil
 }
 
-func GetUserByName(userName string) (*models.User, error) {
+func defaultGetUserByName(userName string) (*models.User, error) {
 	ctx := context.TODO()
 	user := &models.User{}
 	err := userCollection.FindOne(ctx, bson.M{"username": userName}).Decode(user)
