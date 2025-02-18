@@ -18,9 +18,14 @@ var (
 	domain        string
 	senderName    string
 	senderEmail   string
+	SendEmail     = defualtSendEmail
+	GenerateOTP   = defaultGenerateOTP
 )
 
 func init() {
+	if os.Getenv("TEST_ENV") == "true" {
+		return // Skip loading .env in tests ?? Hmmm, is there a beter way ?
+	}
 	envPath := os.Getenv("ENV_PATH")
 	if envPath == "" {
 		envPath = "../../.env"
@@ -35,12 +40,12 @@ func init() {
 	senderEmail = os.Getenv("MAILGUN_SENDER_EMAIL")
 }
 
-func GenerateOTP() string {
+func defaultGenerateOTP() string {
 	rand.Seed(time.Now().UnixNano())
 	return fmt.Sprintf("%06d", rand.Intn(1000000))
 }
 
-func SendEmail(toEmail, message string) error {
+func defualtSendEmail(toEmail, message string) error {
 	mailgunURL := fmt.Sprintf("https://api.mailgun.net/v3/%s/messages", domain)
 
 	data := url.Values{}
