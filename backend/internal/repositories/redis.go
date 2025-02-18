@@ -11,13 +11,14 @@ import (
 )
 
 var RedisClient *redis.Client
+var IsRateLimited = defualtIsRateLimited
 
 // InitRedis initializes a persistent connection to Redis.
 func InitRedis() {
 	RedisClient = redis.NewClient(&redis.Options{
-		Addr:     "localhost:6379", 
-		Password: "",              
-		DB:       0,           
+		Addr:     "localhost:6379",
+		Password: "",
+		DB:       0,
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -28,7 +29,6 @@ func InitRedis() {
 	}
 	log.Println("[INFO] Successfully connected to Redis")
 }
-
 
 func SetRcache(key string, value interface{}, expiration time.Duration) error {
 	ctx := context.Background()
@@ -80,14 +80,14 @@ func DeleteRcache(key string) error {
 	return nil
 }
 
-func IsRateLimited(userID string, limit int, duration time.Duration) bool {
+func defualtIsRateLimited(userID string, limit int, duration time.Duration) bool {
 	ctx := context.Background()
 	key := "rate_limit:" + userID
 
 	count, err := RedisClient.Incr(ctx, key).Result()
 	if err != nil {
 		log.Printf("[ERROR] Redis INCR error: %v", err)
-		return false 
+		return false
 	}
 
 	if count == 1 {
