@@ -9,8 +9,10 @@ import (
 	"time"
 )
 
+var IsIPRateLimited = defaultIsIPRateLimited
+
 // IsIPRateLimited applies rate limiting per IP
-func IsIPRateLimited(r *http.Request, limit int, duration time.Duration) bool {
+func defaultIsIPRateLimited(r *http.Request, limit int, duration time.Duration) bool {
 	ctx := context.Background()
 	clientIP := utils.GetClientIP(r)
 
@@ -19,7 +21,7 @@ func IsIPRateLimited(r *http.Request, limit int, duration time.Duration) bool {
 	count, err := repositories.RedisClient.Incr(ctx, key).Result()
 	if err != nil {
 		log.Printf("[ERROR] Redis INCR error: %v", err)
-		return false 
+		return false
 	}
 
 	if count == 1 {
