@@ -11,7 +11,7 @@ import LinkedInIcon from "@mui/icons-material/LinkedIn";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import { toast } from 'react-toastify';
 
-const VerificationPage = ({user, setUser}) => {
+const VerificationPage = ({user, setUser, apiUrl}) => {
   const [twitterConnected, ] = useState(user?.x_verified);
   const [linkedinConnected, ] = useState(user?.linkedin_verified);
   const [hashnodeVerified, setHashnodeVerified] = useState(user?.hashnode_verified);
@@ -24,11 +24,11 @@ const VerificationPage = ({user, setUser}) => {
 
 
   const handleTwitterConnect = () => {
-    window.location.href = "http://localhost:9696/api/v1/user/connect-twitter";
+    window.location.href = apiUrl + "/api/v1/user/connect-twitter";
   };
 
   const handleLinkedInConnect = () => {
-    window.location.href = "http://localhost:9696/api/v1/user/connect-linkedin";
+    window.location.href = apiUrl + "/api/v1/user/connect-linkedin";
   };
 
   const handleHashnodeVerify = async () => {
@@ -37,7 +37,7 @@ const VerificationPage = ({user, setUser}) => {
     }
 
     try {
-      const response = await fetch('http://localhost:9696/api/v1/user/verify-hashnode', {
+      const response = await fetch(apiUrl + '/api/v1/user/verify-hashnode', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -65,7 +65,7 @@ const VerificationPage = ({user, setUser}) => {
       return;
     }
     try {
-      const response = await fetch('http://localhost:9696/api/v1/user/verify-email', {
+      const response = await fetch( apiUrl + '/api/v1/user/verify-email', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -96,7 +96,7 @@ const VerificationPage = ({user, setUser}) => {
   const handleResendOtp = async () => {
 
     try {
-      const response = await fetch('http://localhost:9696/api/v1/user/resend-otp', {
+      const response = await fetch(apiUrl + '/api/v1/user/resend-otp', {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -120,7 +120,7 @@ const VerificationPage = ({user, setUser}) => {
       linkedinConnected,
       hashnodeVerified,
     });
-    window.location.href = "http://localhost:5173/blogs";
+    window.location.href = apiUrl + "/blogs";
   };
 
 
