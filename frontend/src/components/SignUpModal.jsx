@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Box, Typography, TextField, Button, Modal } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 
-const SignUpModal = ({ open, handleClose, setIsLoggedIn, setUser }) => {
+const SignUpModal = ({ open, handleClose, setIsLoggedIn, setUser, apiUrl }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -17,7 +17,7 @@ const SignUpModal = ({ open, handleClose, setIsLoggedIn, setUser }) => {
       return;
     }
     try {
-      const response = await fetch('http://localhost:9696/api/v1/user/signup', {
+      const response = await fetch(apiUrl + '/api/v1/user/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
