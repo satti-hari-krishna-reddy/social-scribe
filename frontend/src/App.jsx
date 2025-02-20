@@ -9,10 +9,13 @@ function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  const API_BASE_URL = import.meta.env.VITE_BACKEND_URL;
+  console.log("API_BASE_URL", API_BASE_URL);
+
   // Fetch user info and determine login status
   const checkLoggedIn = async () => {
     try {
-      const response = await fetch('http://localhost:9696/api/v1/user/getinfo', {
+      const response = await fetch(API_BASE_URL+'/api/v1/user/getinfo', {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -48,7 +51,7 @@ function App() {
               ? user?.verified
                 ? <Navigate to="/blogs" />
                 : <Navigate to="/verification" />
-              : <MainPage setIsLoggedIn={setIsLoggedIn} setUser={setUser} />
+              : <MainPage setIsLoggedIn={setIsLoggedIn} setUser={setUser} apiUrl={API_BASE_URL} />
           }
         />
 
@@ -58,7 +61,7 @@ function App() {
             isLoggedIn
               ? user?.verified
                 ? <Navigate to="/blogs" />
-                : <VerificationPage user={user} setUser={setUser} />
+                : <VerificationPage user={user} setUser={setUser} apiUrl={API_BASE_URL} />
               : <Navigate to="/" />
           }
         />
@@ -68,7 +71,7 @@ function App() {
           element={
             isLoggedIn
               ? user?.verified
-                ? <Blogs />
+                ? <Blogs apiUrl={API_BASE_URL} />
                 : <Navigate to="/verification" />
               : <Navigate to="/" />
           }
