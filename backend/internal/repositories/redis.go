@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -15,10 +17,25 @@ var IsRateLimited = defualtIsRateLimited
 
 // InitRedis initializes a persistent connection to Redis.
 func InitRedis() {
+	redisAddr := os.Getenv("REDIS_ADDR")
+	redisPassword := os.Getenv("REDIS_PASSWORD")
+	redisDB, err := strconv.Atoi(os.Getenv("REDIS_DB"))
+	if err != nil {
+		log.Println("[WARN] REDIS_DB not set or invalid, using default value")
+		redisDB = 0
+	}
+	if redisAddr == "" {
+		log.Println("[WARN] REDIS_ADDR not set, using default value")
+		redisAddr = "localhost:6379"
+	}
+	if redisPassword == "" {
+		log.Println("[WARN] REDIS_PASSWORD not set, trying to connect without password")
+	}
+
 	RedisClient = redis.NewClient(&redis.Options{
-		Addr:     "localhost:6379",
-		Password: "",
-		DB:       0,
+		Addr:     redisAddr,
+		Password: redisPassword,
+		DB:       redisDB,
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
