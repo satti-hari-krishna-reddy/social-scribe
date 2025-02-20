@@ -22,7 +22,7 @@ import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 dayjs.extend(utc);
 
-const BlogCard = ({ blog }) => {
+const BlogCard = ({ blog, apiUrl }) => {
   const location = useLocation();
   const queryParams = new URLSearchParams(location.search);
   const tab = queryParams.get('tab');
@@ -52,7 +52,7 @@ const BlogCard = ({ blog }) => {
     }
 
     try {
-      const response = await fetch("http://localhost:9696/api/v1/blogs/user/share", {
+      const response = await fetch(apiUrl + "/api/v1/blogs/user/share", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -111,7 +111,7 @@ const BlogCard = ({ blog }) => {
         },
       };
 
-      const response = await fetch("http://localhost:9696/api/v1/blogs/schedule", {
+      const response = await fetch(apiUrl + "/api/v1/blogs/schedule", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -134,7 +134,7 @@ const BlogCard = ({ blog }) => {
 
     const payload = { id: blog.id };
     try {
-      const response = await fetch("http://localhost:9696/api/v1/user/scheduled-blogs/cancel", {
+      const response = await fetch(apiUrl + "/api/v1/user/scheduled-blogs/cancel", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
