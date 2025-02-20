@@ -4,7 +4,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 
-const Login = ({ open, handleClose, setUser, setIsLoggedIn }) => {
+const Login = ({ open, handleClose, setUser, setIsLoggedIn, apiUrl }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [otp, setOtp] = useState('');
@@ -16,7 +16,7 @@ const Login = ({ open, handleClose, setUser, setIsLoggedIn }) => {
 
   const handleLogin = async () => {
     try {
-      const response = await fetch('http://localhost:9696/api/v1/user/login', {
+      const response = await fetch(apiUrl + '/api/v1/user/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -56,7 +56,7 @@ const Login = ({ open, handleClose, setUser, setIsLoggedIn }) => {
       return;
     }
     try {
-      const response = await fetch('http://localhost:9696/api/v1/user/forgot-password', {
+      const response = await fetch(apiUrl + '/api/v1/user/forgot-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
@@ -86,7 +86,7 @@ const Login = ({ open, handleClose, setUser, setIsLoggedIn }) => {
       return;
     }
     try {
-      const response = await fetch('http://localhost:9696/api/v1/user/reset-password', {
+      const response = await fetch(apiUrl + '/api/v1/user/reset-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -128,7 +128,7 @@ const Login = ({ open, handleClose, setUser, setIsLoggedIn }) => {
       return;
     }
     try {
-      const response = await fetch('http://localhost:9696/api/v1/user/forgot-password', {
+      const response = await fetch(apiUrl + '/api/v1/user/forgot-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
