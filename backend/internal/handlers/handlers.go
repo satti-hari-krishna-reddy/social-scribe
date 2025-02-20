@@ -33,6 +33,7 @@ import (
 
 var twitterConfig = &oauth1.Config{}
 var linkedinConfig = &oauth2.Config{}
+var frontendURL = os.Getenv("FRONTEND_URL")
 
 func init() {
 	if os.Getenv("TEST_ENV") == "true" {
@@ -40,7 +41,12 @@ func init() {
 	}
 	err := godotenv.Load("../../.env")
 	if err != nil {
-		log.Fatalf("Error loading .env file: %v", err)
+		log.Printf("Error loading .env file: %v", err)
+	}
+	frontendURL = os.Getenv("FRONTEND_URL")
+	if frontendURL == "" {
+		log.Println("[WARN] FRONTEND_URL not set in .env, using default")
+		frontendURL = "http://localhost:5173"
 	}
 	twitterConfig = &oauth1.Config{
 		ConsumerKey:    os.Getenv("TWITTER_CONSUMER_KEY"),
@@ -523,7 +529,8 @@ func XcallbackHandler(resp http.ResponseWriter, req *http.Request) {
 	}
 
 	log.Printf("[INFO] User with ID %s connected to X(twitter) Successfully", user.Id)
-	http.Redirect(resp, req, "http://localhost:5173/verification", http.StatusSeeOther)
+	redirectUrl := fmt.Sprintf("%s/verification", frontendURL)
+	http.Redirect(resp, req, redirectUrl, http.StatusSeeOther)
 }
 
 func ConnectLinkedInHandler(resp http.ResponseWriter, req *http.Request) {
@@ -643,7 +650,8 @@ func LinkedCallbackHandler(resp http.ResponseWriter, req *http.Request) {
 	log.Printf("[INFO] User with ID %s connected to LinkedIn Successfully", userIdStr)
 
 	// Redirect the user back to the frontend
-	http.Redirect(resp, req, "http://localhost:5173/verification", http.StatusSeeOther)
+	redirectUrl := fmt.Sprintf("%s/verification", frontendURL)
+	http.Redirect(resp, req, redirectUrl, http.StatusSeeOther)
 }
 
 func ValidateLogin(req *http.Request) (string, error) {
