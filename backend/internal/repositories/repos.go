@@ -3,6 +3,7 @@ package repositories
 import (
 	"context"
 	"log"
+	"os"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -16,12 +17,17 @@ var cacheCollection *mongo.Collection
 var scheduledItemsCollection *mongo.Collection
 
 func InitMongoDb() {
+	mongoURI := os.Getenv("MONGO_URI")
+	if mongoURI == "" {
+		log.Println("[WARN] MONGO_URI not set, using default value")
+		mongoURI = "mongodb://localhost:27017"
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	dbName := "social-scribe"
 
-	clientOptions := options.Client().ApplyURI("mongodb://localhost:27017")
+	clientOptions := options.Client().ApplyURI(mongoURI)
 	var err error
 	client, err = mongo.Connect(ctx, clientOptions)
 	if err != nil {
