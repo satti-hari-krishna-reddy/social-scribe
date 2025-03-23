@@ -49,3 +49,8 @@ jobs:
         uses: github/codeql-action/upload-sarif@v2
         with:
           sarif_file: results.sarif
+
+      - name: Check Prettier formatting in frontend
+        run: |
+          cd frontend
+          npx prettier --check .
