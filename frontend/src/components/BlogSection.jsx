@@ -1,5 +1,5 @@
-import React from "react";
-import { Tabs, Tab, Button } from "@mui/material";
+import React from 'react';
+import { Tabs, Tab, Button } from '@mui/material';
 
 const BlogSectionTabs = ({ activeTab, onTabChange }) => {
   const handleChange = (event, newValue) => {
@@ -7,7 +7,7 @@ const BlogSectionTabs = ({ activeTab, onTabChange }) => {
   };
 
   return (
-    <div style={{ marginTop: "20px" }}>
+    <div style={{ marginTop: '20px' }}>
       <Tabs
         value={activeTab}
         onChange={handleChange}
@@ -19,7 +19,6 @@ const BlogSectionTabs = ({ activeTab, onTabChange }) => {
         <Tab label="Scheduled Blogs" value="scheduled" />
         <Tab label="Shared Blogs" value="shared" />
       </Tabs>
-
     </div>
   );
 };
