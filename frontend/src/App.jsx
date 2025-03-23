@@ -9,8 +9,7 @@ function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const API_BASE_URL = import.meta.env.VITE_BACKEND_URL;
-  console.log("API_BASE_URL", API_BASE_URL);
+  const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || '';
 
   // Fetch user info and determine login status
   const checkLoggedIn = async () => {
