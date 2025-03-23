@@ -1,5 +1,5 @@
 import React from "react";
-import { Tabs, Tab } from "@mui/material";
+import { Tabs, Tab, Button } from "@mui/material";
 
 const BlogSectionTabs = ({ activeTab, onTabChange }) => {
   const handleChange = (event, newValue) => {
@@ -19,6 +19,7 @@ const BlogSectionTabs = ({ activeTab, onTabChange }) => {
         <Tab label="Scheduled Blogs" value="scheduled" />
         <Tab label="Shared Blogs" value="shared" />
       </Tabs>
+
     </div>
   );
 };
