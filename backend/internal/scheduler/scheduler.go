@@ -96,7 +96,6 @@ func (s *Scheduler) runAgent() {
 	for {
 		s.mu.Lock()
 		if s.heap.Len() == 0 {
-			log.Println("[INFO] No tasks in the heap, waiting for new tasks")
 			s.mu.Unlock()
 
 			select {
@@ -169,51 +168,64 @@ func (s *Scheduler) runAgent() {
 }
 
 func (s *Scheduler) worker(task models.ScheduledBlogData) {
-	log.Printf("[INFO] Worker executing task for user %v with blog %v, for platforms %v", task.UserID, task.ScheduledBlog.Blog.Id, task.ScheduledBlog.Platforms)
 
-	user, err := repo.GetUserById(task.UserID)
-	if err != nil || user == nil {
-		log.Printf("[ERROR] Error getting user or user not found: %v", task.UserID)
-		if delErr := repo.DeleteScheduledTask(task); delErr != nil {
+	if task.EmailId != "" {
+		if err := services.SendEmail(task.EmailId, task.Message); err != nil {
+			log.Printf("[ERROR] Sending OTP email to %s: %v", task.EmailId, err)
+		}
+		delErr := repo.DeleteScheduledTask(task)
+		if delErr != nil {
 			log.Printf("[ERROR] Error deleting scheduled task: %v", delErr)
 		}
-		return
-	}
 
-	blogId := task.ScheduledBlog.Blog.Id
-	platforms := task.ScheduledBlog.Platforms
 
-	processErr := services.ProcessSharedBlog(user, blogId, platforms)
-	if processErr != nil {
-		log.Printf("[ERROR] Error processing shared blog for blog id %s and user id %s: %v", blogId, task.UserID, processErr)
-	}
-
-	delErr := repo.DeleteScheduledTask(task)
-	if delErr != nil {
-		log.Printf("[ERROR] Error deleting scheduled task: %v", delErr)
-	}
-
-	removed := false
-	for i, blog := range user.ScheduledBlogs {
-		if blog.Id == blogId {
-			user.ScheduledBlogs = append(user.ScheduledBlogs[:i], user.ScheduledBlogs[i+1:]...)
-			removed = true
-			break
-		}
-	}
-	if !removed {
-		log.Printf("[WARN] Blog with id %s not found in user's scheduled blogs", blogId)
-	}
-
-	updErr := repo.UpdateUser(task.UserID, user)
-	if updErr != nil {
-		log.Printf("[ERROR] Error updating user: %v", updErr)
-	}
-
-	if processErr != nil {
-		log.Printf("[INFO] Task executed with errors for blog with ID %s and user ID %s, error: %v", blogId, task.UserID, processErr)
 	} else {
-		log.Printf("[INFO] Task executed successfully for blog with ID %s and user ID %s at %v", blogId, task.UserID, task.ScheduledBlog.ScheduledTime)
+		log.Printf("[INFO] Worker executing task for user %v with blog %v, for platforms %v", task.UserID, task.ScheduledBlog.Blog.Id, task.ScheduledBlog.Platforms)
+
+		user, err := repo.GetUserById(task.UserID)
+		if err != nil || user == nil {
+			log.Printf("[ERROR] Error getting user or user not found: %v", task.UserID)
+			if delErr := repo.DeleteScheduledTask(task); delErr != nil {
+				log.Printf("[ERROR] Error deleting scheduled task: %v", delErr)
+			}
+			return
+		}
+
+		blogId := task.ScheduledBlog.Blog.Id
+		platforms := task.ScheduledBlog.Platforms
+
+		processErr := services.ProcessSharedBlog(user, blogId, platforms)
+		if processErr != nil {
+			log.Printf("[ERROR] Error processing shared blog for blog id %s and user id %s: %v", blogId, task.UserID, processErr)
+		}
+
+		delErr := repo.DeleteScheduledTask(task)
+		if delErr != nil {
+			log.Printf("[ERROR] Error deleting scheduled task: %v", delErr)
+		}
+
+		removed := false
+		for i, blog := range user.ScheduledBlogs {
+			if blog.Id == blogId {
+				user.ScheduledBlogs = append(user.ScheduledBlogs[:i], user.ScheduledBlogs[i+1:]...)
+				removed = true
+				break
+			}
+		}
+		if !removed {
+			log.Printf("[WARN] Blog with id %s not found in user's scheduled blogs", blogId)
+		}
+
+		updErr := repo.UpdateUser(task.UserID, user)
+		if updErr != nil {
+			log.Printf("[ERROR] Error updating user: %v", updErr)
+		}
+
+		if processErr != nil {
+			log.Printf("[INFO] Task executed with errors for blog with ID %s and user ID %s, error: %v", blogId, task.UserID, processErr)
+		} else {
+			log.Printf("[INFO] Task executed successfully for blog with ID %s and user ID %s at %v", blogId, task.UserID, task.ScheduledBlog.ScheduledTime)
+		}
 	}
 }
 
