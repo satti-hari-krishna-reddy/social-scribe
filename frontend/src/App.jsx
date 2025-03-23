@@ -14,7 +14,7 @@ function App() {
   // Fetch user info and determine login status
   const checkLoggedIn = async () => {
     try {
-      const response = await fetch(API_BASE_URL+'/api/v1/user/getinfo', {
+      const response = await fetch(API_BASE_URL + '/api/v1/user/getinfo', {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -42,37 +42,48 @@ function App() {
   return (
     <Router>
       <Routes>
-
         <Route
           path="/"
           element={
-            isLoggedIn
-              ? user?.verified
-                ? <Navigate to="/blogs" />
-                : <Navigate to="/verification" />
-              : <MainPage setIsLoggedIn={setIsLoggedIn} setUser={setUser} apiUrl={API_BASE_URL} />
+            isLoggedIn ? (
+              user?.verified ? (
+                <Navigate to="/blogs" />
+              ) : (
+                <Navigate to="/verification" />
+              )
+            ) : (
+              <MainPage setIsLoggedIn={setIsLoggedIn} setUser={setUser} apiUrl={API_BASE_URL} />
+            )
           }
         />
 
         <Route
           path="/verification"
           element={
-            isLoggedIn
-              ? user?.verified
-                ? <Navigate to="/blogs" />
-                : <VerificationPage user={user} setUser={setUser} apiUrl={API_BASE_URL} />
-              : <Navigate to="/" />
+            isLoggedIn ? (
+              user?.verified ? (
+                <Navigate to="/blogs" />
+              ) : (
+                <VerificationPage user={user} setUser={setUser} apiUrl={API_BASE_URL} />
+              )
+            ) : (
+              <Navigate to="/" />
+            )
           }
         />
 
         <Route
           path="/blogs"
           element={
-            isLoggedIn
-              ? user?.verified
-                ? <Blogs apiUrl={API_BASE_URL} />
-                : <Navigate to="/verification" />
-              : <Navigate to="/" />
+            isLoggedIn ? (
+              user?.verified ? (
+                <Blogs apiUrl={API_BASE_URL} />
+              ) : (
+                <Navigate to="/verification" />
+              )
+            ) : (
+              <Navigate to="/" />
+            )
           }
         />
       </Routes>
