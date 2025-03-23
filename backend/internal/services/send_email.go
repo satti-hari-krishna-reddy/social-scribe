@@ -1,11 +1,12 @@
 package services
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"math/rand"
+	"mime/multipart"
 	"net/http"
-	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -24,8 +25,9 @@ var (
 
 func init() {
 	if os.Getenv("TEST_ENV") == "true" {
-		return // Skip loading .env in tests ?? Hmmm, is there a beter way ?
+		return
 	}
+
 	envPath := os.Getenv("ENV_PATH")
 	if envPath == "" {
 		envPath = "../../.env"
@@ -37,7 +39,11 @@ func init() {
 	mailgunAPIKey = os.Getenv("MAILGUN_API_KEY")
 	domain = os.Getenv("MAILGUN_DOMAIN")
 	senderName = os.Getenv("MAILGUN_SENDER_NAME")
-	senderEmail = os.Getenv("MAILGUN_SENDER_EMAIL")
+	senderEmail = os.Getenv("MAILGUN_EMAIL")
+
+	if !strings.Contains(senderEmail, "@") {
+		log.Fatalf("MAILGUN_EMAIL is invalid: %s", senderEmail)
+	}
 }
 
 func defaultGenerateOTP() string {
@@ -46,46 +52,47 @@ func defaultGenerateOTP() string {
 }
 
 func defualtSendEmail(toEmail, message string) error {
-	mailgunURL := fmt.Sprintf("https://api.mailgun.net/v3/%s/messages", domain)
+	reqURL := fmt.Sprintf("https://api.mailgun.net/v3/%s/messages", domain)
+	data := &bytes.Buffer{}
+	writer := multipart.NewWriter(data)
 
-	data := url.Values{}
-	data.Set("from", fmt.Sprintf("%s <%s>", senderName, senderEmail))
-	data.Set("to", toEmail)
-	data.Set("subject", "Your OTP Code for Social Scribe")
-	data.Set("text", message)
+	sender := fmt.Sprintf("%s <%s>", senderName, senderEmail)
 
-	req, err := http.NewRequest("POST", mailgunURL, strings.NewReader(data.Encode()))
+	// Add fields
+	_ = writer.WriteField("from", sender)
+	_ = writer.WriteField("to", toEmail)
+	_ = writer.WriteField("subject", "Your OTP Code for Social Scribe")
+	_ = writer.WriteField("text", message)
+
+	writer.Close()
+
+	req, err := http.NewRequest("POST", reqURL, data)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create request: %v", err)
 	}
+
 	req.SetBasicAuth("api", mailgunAPIKey)
-	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Add("Content-Type", writer.FormDataContentType())
 
+	// Send request with retries
 	client := &http.Client{Timeout: 10 * time.Second}
-
 	const maxRetries = 3
 	var resp *http.Response
 
 	for i := 0; i < maxRetries; i++ {
 		resp, err = client.Do(req)
-		if err == nil && (resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusAccepted) {
-			break
+		if err == nil && resp.StatusCode == http.StatusOK {
+			defer resp.Body.Close()
+			return nil
 		}
-		if resp != nil {
-			resp.Body.Close()
-		}
-		waitTime := time.Duration((i+1)*2) * time.Second
-		time.Sleep(waitTime)
+
+		time.Sleep(time.Duration((i+1)*2) * time.Second)
 	}
 
 	if err != nil {
 		return fmt.Errorf("failed to send email after %d attempts, last error: %v", maxRetries, err)
 	}
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
-		return fmt.Errorf("failed to send email, status code: %d", resp.StatusCode)
-	}
-
 	defer resp.Body.Close()
-	return nil
+
+	return fmt.Errorf("failed to send email: received status code %d", resp.StatusCode)
 }
