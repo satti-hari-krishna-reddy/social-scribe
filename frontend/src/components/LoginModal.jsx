@@ -64,7 +64,7 @@ const Login = ({ open, handleClose, setUser, setIsLoggedIn, apiUrl }) => {
       if (response.ok) {
         toast.success('OTP sent successfully');
         setForgotMode(true);
-      }  else if (response.status === 429) {
+      } else if (response.status === 429) {
         setError(data.reason || 'Too Many Requests');
         toast.error('Too many requests. Wait for 1 minute before trying again');
       } else {
@@ -135,7 +135,7 @@ const Login = ({ open, handleClose, setUser, setIsLoggedIn, apiUrl }) => {
       });
       if (response.ok) {
         toast.success('OTP resent successfully');
-      }  else if (response.status === 429) {
+      } else if (response.status === 429) {
         setError(data.reason || 'Too Many Requests');
         toast.error('Too many requests. Wait for 1 minute before trying again');
       } else {
@@ -148,25 +148,35 @@ const Login = ({ open, handleClose, setUser, setIsLoggedIn, apiUrl }) => {
   };
 
   return (
-    <Modal open={open} onClose={handleClose} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <Box 
-        sx={{ 
-          width: '100%', 
-          maxWidth: 400, 
-          padding: '2rem', 
-          backgroundColor: '#2E2E2E', 
-          borderRadius: '12px', 
+    <Modal
+      open={open}
+      onClose={handleClose}
+      sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+    >
+      <Box
+        sx={{
+          width: '100%',
+          maxWidth: 400,
+          padding: '2rem',
+          backgroundColor: '#2E2E2E',
+          borderRadius: '12px',
           color: '#FFFFFF',
           boxShadow: 24,
-          textAlign: 'center', 
-          position: 'relative'
+          textAlign: 'center',
+          position: 'relative',
         }}
       >
-        <IconButton onClick={handleClose} sx={{ position: 'absolute', top: 8, right: 8, color: '#FF6B6B' }}>
+        <IconButton
+          onClick={handleClose}
+          sx={{ position: 'absolute', top: 8, right: 8, color: '#FF6B6B' }}
+        >
           <CloseIcon />
         </IconButton>
-        
-        <Typography variant="h5" sx={{ fontWeight: 'bold', marginBottom: '1rem', color: '#FF6B6B' }}>
+
+        <Typography
+          variant="h5"
+          sx={{ fontWeight: 'bold', marginBottom: '1rem', color: '#FF6B6B' }}
+        >
           {forgotMode ? 'Reset Password' : 'Login'}
         </Typography>
 
@@ -176,11 +186,11 @@ const Login = ({ open, handleClose, setUser, setIsLoggedIn, apiUrl }) => {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           fullWidth
-          sx={{ 
-            marginBottom: 2, 
-            backgroundColor: '#3A3A3A', 
+          sx={{
+            marginBottom: 2,
+            backgroundColor: '#3A3A3A',
             borderRadius: '5px',
-            input: { color: '#FFFFFF' }, 
+            input: { color: '#FFFFFF' },
             '& .MuiOutlinedInput-root': {
               '& fieldset': { borderColor: '#FF6B6B' },
               '&:hover fieldset': { borderColor: '#FF6B6B' },
@@ -199,9 +209,9 @@ const Login = ({ open, handleClose, setUser, setIsLoggedIn, apiUrl }) => {
               value={otp}
               onChange={(e) => setOtp(e.target.value)}
               fullWidth
-              sx={{ 
-                marginBottom: 2, 
-                backgroundColor: '#3A3A3A', 
+              sx={{
+                marginBottom: 2,
+                backgroundColor: '#3A3A3A',
                 borderRadius: '5px',
                 input: { color: '#FFFFFF' },
                 '& .MuiOutlinedInput-root': {
@@ -219,9 +229,9 @@ const Login = ({ open, handleClose, setUser, setIsLoggedIn, apiUrl }) => {
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               fullWidth
-              sx={{ 
-                marginBottom: 2, 
-                backgroundColor: '#3A3A3A', 
+              sx={{
+                marginBottom: 2,
+                backgroundColor: '#3A3A3A',
                 borderRadius: '5px',
                 input: { color: '#FFFFFF' },
                 '& .MuiOutlinedInput-root': {
@@ -239,9 +249,9 @@ const Login = ({ open, handleClose, setUser, setIsLoggedIn, apiUrl }) => {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               fullWidth
-              sx={{ 
-                marginBottom: 2, 
-                backgroundColor: '#3A3A3A', 
+              sx={{
+                marginBottom: 2,
+                backgroundColor: '#3A3A3A',
                 borderRadius: '5px',
                 input: { color: '#FFFFFF' },
                 '& .MuiOutlinedInput-root': {
@@ -261,9 +271,9 @@ const Login = ({ open, handleClose, setUser, setIsLoggedIn, apiUrl }) => {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             fullWidth
-            sx={{ 
-              marginBottom: 2, 
-              backgroundColor: '#3A3A3A', 
+            sx={{
+              marginBottom: 2,
+              backgroundColor: '#3A3A3A',
               borderRadius: '5px',
               input: { color: '#FFFFFF' },
               '& .MuiOutlinedInput-root': {
@@ -275,19 +285,23 @@ const Login = ({ open, handleClose, setUser, setIsLoggedIn, apiUrl }) => {
             InputLabelProps={{ style: { color: '#FFFFFF' } }}
           />
         )}
-        
-        {error && <Typography color="red" variant="body2">{error}</Typography>}
-        
-        <Button 
-          variant="contained" 
+
+        {error && (
+          <Typography color="red" variant="body2">
+            {error}
+          </Typography>
+        )}
+
+        <Button
+          variant="contained"
           fullWidth
-          sx={{ 
-            marginTop: 2, 
-            backgroundColor: '#FF6B6B', 
-            color: 'white', 
+          sx={{
+            marginTop: 2,
+            backgroundColor: '#FF6B6B',
+            color: 'white',
             fontWeight: 'bold',
             '&:hover': { backgroundColor: '#FF4C4C' },
-          }} 
+          }}
           onClick={forgotMode ? handleResetPassword : handleLogin}
         >
           {forgotMode ? 'Reset Now' : 'Login'}
@@ -295,36 +309,36 @@ const Login = ({ open, handleClose, setUser, setIsLoggedIn, apiUrl }) => {
 
         {forgotMode ? (
           <>
-            <Button 
-              variant="text" 
+            <Button
+              variant="text"
               fullWidth
               sx={{ marginTop: 1, color: '#FF6B6B' }}
               onClick={handleResendOTP}
             >
               Resend OTP
             </Button>
-            <Typography 
-              variant="body2" 
-              sx={{ 
-                marginTop: 2, 
-                color: '#B8B8B8', 
+            <Typography
+              variant="body2"
+              sx={{
+                marginTop: 2,
+                color: '#B8B8B8',
                 cursor: 'pointer',
                 '&:hover': { textDecoration: 'underline' },
-              }} 
+              }}
               onClick={() => setForgotMode(false)}
             >
               Back to Login
             </Typography>
           </>
         ) : (
-          <Typography 
-            variant="body2" 
-            sx={{ 
-              marginTop: 2, 
-              color: '#B8B8B8', 
+          <Typography
+            variant="body2"
+            sx={{
+              marginTop: 2,
+              color: '#B8B8B8',
               cursor: 'pointer',
               '&:hover': { textDecoration: 'underline' },
-            }} 
+            }}
             onClick={handleForgotPassword}
           >
             Forgot Password?
