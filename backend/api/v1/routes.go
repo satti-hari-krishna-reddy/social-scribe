@@ -36,6 +36,10 @@ func RegisterRoutes() *mux.Router {
 		middlewares.AuthMiddleware(200, time.Minute, http.HandlerFunc(handlers.GetUserBlogsHandler)),
 	).Methods(http.MethodGet, http.MethodOptions)
 
+	apiV1.Handle("/user/logout",
+		middlewares.AuthMiddleware(15, time.Minute, http.HandlerFunc(handlers.LogoutUserHandler)),
+	).Methods(http.MethodPost, http.MethodOptions)
+
 	apiV1.Handle("/user/notifications",
 		middlewares.AuthMiddleware(150, time.Minute, http.HandlerFunc(handlers.GetUserNotificationsHandler)),
 	).Methods(http.MethodGet, http.MethodOptions)
@@ -81,6 +85,9 @@ func RegisterRoutes() *mux.Router {
 	apiV1.Handle("/user/resend-otp",
 		middlewares.AuthMiddleware(5, time.Minute, http.HandlerFunc(handlers.ResetEmailOtpHandler)),
 	).Methods(http.MethodGet, http.MethodOptions)
+	apiV1.Handle("/user/delete-account",
+		middlewares.AuthMiddleware(20, time.Minute, http.HandlerFunc(handlers.DeleteAccountHandler)),
+	).Methods(http.MethodDelete, http.MethodOptions)
 
 	return router
 }
