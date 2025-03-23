@@ -10,6 +10,7 @@ import TwitterIcon from "@mui/icons-material/Twitter";
 import LinkedInIcon from "@mui/icons-material/LinkedIn";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import { toast } from 'react-toastify';
+import { useNavigate } from 'react-router-dom';
 
 const VerificationPage = ({user, setUser, apiUrl}) => {
   const [twitterConnected, ] = useState(user?.x_verified);
@@ -22,6 +23,7 @@ const VerificationPage = ({user, setUser, apiUrl}) => {
   const [otpStatus, setOtpStatus] = useState(null);
   const [email, ] = useState(user?.username);
 
+  const navigate = useNavigate()
 
   const handleTwitterConnect = () => {
     window.location.href = apiUrl + "/api/v1/user/connect-twitter";
@@ -76,6 +78,7 @@ const VerificationPage = ({user, setUser, apiUrl}) => {
         credentials: 'include',
       });
       if (response.ok) {
+        user.email_verified = true
         setEmailVerified(true);
         setOtpStatus("success");
       } else if (response.status === 400) {
@@ -119,16 +122,18 @@ const VerificationPage = ({user, setUser, apiUrl}) => {
       twitterConnected,
       linkedinConnected,
       hashnodeVerified,
+      emailVerified,
     });
-    window.location.href = apiUrl + "/blogs";
+   navigate('/blogs');
   };
 
 
   useEffect(() => { 
-    if (hashnodeVerified && (linkedinConnected || twitterConnected )) {
+    if (hashnodeVerified && emailVerified && (linkedinConnected || twitterConnected )) {
         setDisabled(false);
+        user.verified = true
         }
-    }, [hashnodeVerified, linkedinConnected, twitterConnected]);
+    }, [hashnodeVerified, linkedinConnected, twitterConnected, emailVerified]);
 
 
   return (
