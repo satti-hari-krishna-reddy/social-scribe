@@ -12,10 +12,11 @@ import (
 )
 
 var (
-	InsertUser    = defaultInsertUser
-	UpdateUser    = defaultUpdateUser
-	GetUserById   = defaultGetUserById
-	GetUserByName = defaultGetUserByName
+	InsertUser     = defaultInsertUser
+	UpdateUser     = defaultUpdateUser
+	GetUserById    = defaultGetUserById
+	GetUserByName  = defaultGetUserByName
+	DeleteUserById = defaultDeleteUserById
 )
 
 func defaultInsertUser(user models.User) (string, error) {
@@ -87,4 +88,21 @@ func defaultGetUserByName(userName string) (*models.User, error) {
 		return user, err
 	}
 	return user, nil
+}
+
+func defaultDeleteUserById(userID string) error {
+	ctx := context.TODO()
+	objID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return err
+	}
+	filter := bson.M{"_id": objID}
+	result, err := userCollection.DeleteOne(ctx, filter)
+	if err != nil {
+		return err
+	}
+	if result.DeletedCount == 0 {
+		return mongo.ErrNoDocuments
+	}
+	return nil
 }
