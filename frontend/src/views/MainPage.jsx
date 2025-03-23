@@ -7,7 +7,6 @@ import Footer from '../components/Footer';
 import About from '../components/About';
 
 function MainPage({ setIsLoggedIn, setUser, apiUrl }) {
-    
   return (
     <div>
       <HeroSection setIsLoggedIn={setIsLoggedIn} setUser={setUser} apiUrl={apiUrl} />
