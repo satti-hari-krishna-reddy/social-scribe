@@ -11,7 +11,7 @@ import (
 
 func invokeAi(prompt string) (string, error) {
 	apiKey := os.Getenv("API_KEY")
-	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=%s", apiKey)
+	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=%s", apiKey)
 
 	// Request payload
 	payload := map[string]interface{}{
