@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -24,6 +25,7 @@ import (
 	"github.com/dghubble/oauth1/twitter"
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 
 	"github.com/joho/godotenv"
 	"golang.org/x/crypto/bcrypt"
@@ -130,10 +132,16 @@ func SignupUserHandler(resp http.ResponseWriter, req *http.Request) {
 		http.Error(resp, `{"error": "Failed to create user"}`, http.StatusInternalServerError)
 		return
 	}
+	objectId, err := primitive.ObjectIDFromHex(userId)
+	if err != nil {
+		http.Error(resp, `{"error": "Invalid user ID format"}`, http.StatusInternalServerError)
+		return
+	}
+	user.Id = objectId
 
 	sessionToken := uuid.New().String()
 	expiration := time.Now().Add(24 * time.Hour)
-	if err := repo.SetCache(sessionToken, userId, 24*time.Hour); err != nil {
+	if err := repo.SetCache(sessionToken, user.Id, 24*time.Hour); err != nil {
 		http.Error(resp, `{"error": "Failed to create session"}`, http.StatusInternalServerError)
 		return
 	}
@@ -155,20 +163,24 @@ func SignupUserHandler(resp http.ResponseWriter, req *http.Request) {
 		return
 	}
 	message := fmt.Sprintf("Your OTP is: %s \n Valid for next 24 hours", otp)
+// this is just a temporary work around to use the existing heap based queue system 
+// to send emails asynchronously and we need a better way to do this in the future
+	emailTask := models.ScheduledBlogData{}
+	shareTime := models.ScheduledBlog{}
+	shareTime.ScheduledTime = time.Now()
+	emailTask.EmailId = user.UserName
+	emailTask.Message = message
+	emailTask.ScheduledBlog = shareTime
+	emailTask.UserID = userId
 
-	if err := services.SendEmail(user.UserName, message); err != nil {
-		log.Printf("[ERROR] Sending OTP email to %s: %v", user.UserName, err)
-		http.Error(resp, `{"error": "Failed to send verification email"}`, http.StatusInternalServerError)
-		return
+	err = taskScheduler.AddTask(emailTask)
+	if err != nil {
+		log.Printf("[ERROR] Failed adding email task to the queue, reason: %s", err)
+		resp.WriteHeader(http.StatusInternalServerError)
+		resp.Write([]byte(`{"success" : false}`))
 	}
 
 	user.PassWord = ""
-	objectId, err := primitive.ObjectIDFromHex(userId)
-	if err != nil {
-		http.Error(resp, `{"error": "Invalid user ID format"}`, http.StatusInternalServerError)
-		return
-	}
-	user.Id = objectId
 	responseJson, err := json.Marshal(user)
 	if err != nil {
 		http.Error(resp, `{"error": "Failed to process user data"}`, http.StatusInternalServerError)
@@ -245,6 +257,34 @@ func LoginUserHandler(resp http.ResponseWriter, req *http.Request) {
 	resp.WriteHeader(http.StatusAccepted)
 	resp.Header().Set("Content-Type", "application/json")
 	resp.Write([]byte(responseJson))
+}
+
+func LogoutUserHandler(resp http.ResponseWriter, req *http.Request) {
+	userId, ok := req.Context().Value(middlewares.UserIDKey).(string)
+	if !ok {
+		http.Error(resp, "Unauthorized: User ID not found", http.StatusUnauthorized)
+		return
+	}
+
+	err := repo.DeleteCache(userId)
+	if err != nil {
+		log.Printf("[ERROR] Failed to delete session for user %s: %v", userId, err)
+		http.Error(resp, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	http.SetCookie(resp, &http.Cookie{
+		Name:     "session_token",
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		MaxAge:   -1,
+	})
+
+	log.Printf("[INFO] User with ID %s logged out successfully", userId)
+	resp.Header().Set("Content-Type", "application/json")
+	resp.WriteHeader(http.StatusOK)
+	resp.Write([]byte(`{"success": true}`))
 }
 
 func GetUserInfoHandler(resp http.ResponseWriter, req *http.Request) {
@@ -1066,10 +1106,22 @@ func ResetEmailOtpHandler(resp http.ResponseWriter, req *http.Request) {
 
 	message := fmt.Sprintf("Your OTP is: %s\n OTP will expire in 30 minutes", otp)
 
-	if err := services.SendEmail(user.UserName, message); err != nil {
-		log.Printf("[ERROR] Sending OTP email to %s: %v", user.UserName, err)
-		http.Error(resp, `{"error": "Failed to send verification email"}`, http.StatusInternalServerError)
-		return
+// this is just a temporary work around to use the existing heap based queue system 
+// to send emails asynchronously and we need a better way to do this in the future
+
+	emailTask := models.ScheduledBlogData{}
+	shareTime := models.ScheduledBlog{}
+	shareTime.ScheduledTime = time.Now()
+	emailTask.EmailId = user.UserName
+	emailTask.Message = message
+	emailTask.ScheduledBlog = shareTime
+	emailTask.UserID = userId
+
+	err = taskScheduler.AddTask(emailTask)
+	if err != nil {
+		log.Printf("[ERROR] Failed adding email task to the queue, reason: %s", err)
+		resp.WriteHeader(http.StatusInternalServerError)
+		resp.Write([]byte(`{"success" : false}`))
 	}
 
 	log.Printf("[INFO] New Email verification OTP generated for the user with ID %s", userId)
@@ -1101,30 +1153,43 @@ func ForgotPasswordHandler(resp http.ResponseWriter, req *http.Request) {
 	otp := services.GenerateOTP()
 	hashedOtp, err := bcrypt.GenerateFromPassword([]byte(otp), bcrypt.DefaultCost)
 	if err != nil {
-		log.Printf("[ERROR] Failed to hash OTP for user %s: %v", userId, err)
+		log.Printf("[ERROR] Failed to hash OTP for user %s: %v", user.UserName, err)
 		http.Error(resp, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
 	cacheKey := fmt.Sprintf("password_reset_%s", userId)
 	if err = repo.DeleteCache(cacheKey); err != nil {
-		log.Printf("[WARNING] Failed to delete old OTP for user %s: %v", userId, err)
+		log.Printf("[WARNING] Failed to delete old OTP for user %s: %v", user.UserName, err)
 	}
 
 	if err = repo.SetCache(cacheKey, string(hashedOtp), 10*time.Minute); err != nil {
-		log.Printf("[ERROR] Failed to store OTP for user %s: %v", userId, err)
+		log.Printf("[ERROR] Failed to store OTP for user %s: %v", user.UserName, err)
 		http.Error(resp, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
 	message := fmt.Sprintf("Your OTP for password reset is: %s\n(Expires in 10 minutes)", otp)
-	if err = services.SendEmail(user.UserName, message); err != nil {
-		log.Printf("[ERROR] Failed to send email to user %s: %v", userId, err)
-		http.Error(resp, "Failed to send email", http.StatusInternalServerError)
-		return
+
+// this is just a temporary work around to use the existing heap based queue system 
+// to send emails asynchronously and we need a better way to do this in the future
+
+	emailTask := models.ScheduledBlogData{}
+	shareTime := models.ScheduledBlog{}
+	shareTime.ScheduledTime = time.Now()
+	emailTask.EmailId = user.UserName
+	emailTask.Message = message
+	emailTask.ScheduledBlog = shareTime
+	emailTask.UserID = userId
+
+	err = taskScheduler.AddTask(emailTask)
+	if err != nil {
+		log.Printf("[ERROR] Failed adding email task to the queue, reason: %s", err)
+		resp.WriteHeader(http.StatusInternalServerError)
+		resp.Write([]byte(`{"success" : false}`))
 	}
 
-	log.Printf("[INFO] Password reset OTP sent successfully for user %s", userId)
+	log.Printf("[INFO] Password reset OTP sent successfully for user %s", user.UserName)
 	resp.Header().Set("Content-Type", "application/json")
 	resp.WriteHeader(http.StatusOK)
 	resp.Write([]byte(`{"success": true}`))
@@ -1197,6 +1262,107 @@ func ResetPasswordHandler(resp http.ResponseWriter, req *http.Request) {
 	}
 
 	log.Printf("[INFO] Password reset successfully for user %s", userId)
+	resp.Header().Set("Content-Type", "application/json")
+	resp.WriteHeader(http.StatusOK)
+	resp.Write([]byte(`{"success": true}`))
+}
+
+func DeleteAccountHandler(resp http.ResponseWriter, req *http.Request) {
+	userId, ok := req.Context().Value(middlewares.UserIDKey).(string)
+	if !ok {
+		resp.WriteHeader(http.StatusUnauthorized)
+		resp.Write([]byte(`{"success": false, "reason": "Unauthorized: User ID not found"}`))
+		return
+	}
+
+	type deleteAccountRequest struct {
+		Password string `json:"password"`
+	}
+
+	var reqBody deleteAccountRequest
+	if err := json.NewDecoder(req.Body).Decode(&reqBody); err != nil {
+		resp.WriteHeader(http.StatusBadRequest)
+		resp.Write([]byte(`{"success": false}`))
+		return
+	}
+
+	if reqBody.Password == "" {
+		resp.WriteHeader(http.StatusBadRequest)
+		resp.Write([]byte(`{"success": false, "reason": "Password is required"}`))
+		return
+	}
+
+	user, err := repo.GetUserById(userId)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			resp.WriteHeader(http.StatusNotFound)
+			resp.Write([]byte(`{"success": false, "reason": "User not found"}`))
+			return
+		}
+		log.Printf("[ERROR] Failed to get user for id %s: %s", userId, err)
+		resp.WriteHeader(http.StatusInternalServerError)
+		resp.Write([]byte(`{"success": false, "reason": "Internal server error"}`))
+		return
+	}
+
+	// Check if the password matches
+	err = bcrypt.CompareHashAndPassword([]byte(user.PassWord), []byte(reqBody.Password))
+	if err != nil {
+		resp.WriteHeader(http.StatusUnauthorized)
+		resp.Write([]byte(`{"success": false, "reason": "Incorrect password"}`))
+		return
+	}
+
+	// Delete any scheduled tasks before cache cleanup
+	for _, blog := range user.ScheduledBlogs {
+		if err := taskScheduler.RemoveTask(blog.Id); err != nil {
+			log.Printf("[ERROR] Failed to remove scheduled task %s: %s", blog.Id, err)
+		}
+	}
+
+	cookie, err := req.Cookie("session_token")
+	if err == nil {
+		if err := repo.DeleteCache(cookie.Value); err != nil {
+			log.Printf("[ERROR] Failed to delete session for user %s: %s", userId, err)
+		}
+	}
+
+	// Clear session cookie from client
+	http.SetCookie(resp, &http.Cookie{
+		Name:     "session_token",
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		MaxAge:   -1,
+	})
+
+	// Delete other user-related cache entries
+	cacheKeys := []string{
+		fmt.Sprintf("email_otp_%s", userId),
+		fmt.Sprintf("password_reset_%s", userId),
+	}
+
+	for _, cacheKey := range cacheKeys {
+		if err := repo.DeleteCache(cacheKey); err != nil {
+			log.Printf("[WARN] Failed to delete cache %s for user %s: %s", cacheKey, userId, err)
+		}
+	}
+
+	// Delete the user from the database
+	err = repo.DeleteUserById(userId)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			resp.WriteHeader(http.StatusNotFound)
+			resp.Write([]byte(`{"success": false, "reason": "User not found"}`))
+			return
+		}
+		log.Printf("[ERROR] Failed to delete user %s: %s", userId, err)
+		resp.WriteHeader(http.StatusInternalServerError)
+		resp.Write([]byte(`{"success": false, "reason": "Internal server error"}`))
+		return
+	}
+
+	log.Printf("[INFO] User %s deleted successfully", userId)
 	resp.Header().Set("Content-Type", "application/json")
 	resp.WriteHeader(http.StatusOK)
 	resp.Write([]byte(`{"success": true}`))
