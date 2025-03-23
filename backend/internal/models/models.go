@@ -45,6 +45,10 @@ type LoginStruct struct {
 type ScheduledBlogData struct {
 	UserID        string        `json:"user_id" bson:"user_id"`
 	ScheduledBlog ScheduledBlog `json:"blog" bson:"blog"`
+	// the below two fields shouldnt here but in a seperate struct but for now
+	//  iam adding here.
+	EmailId string `json:"email_id" bson:"email_id"`
+	Message string `json:"message" bson:"message"`
 }
 
 type Blog struct {
