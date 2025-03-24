@@ -18,7 +18,7 @@ func IPRateLimitMiddleware(limit int, duration time.Duration) func(http.Handler)
 
 			w.Header().Set("Content-Security-Policy", "frame-ancestors 'self'")
 			w.Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=(), usb=()")
-			
+
 			next.ServeHTTP(w, r)
 		})
 	}
