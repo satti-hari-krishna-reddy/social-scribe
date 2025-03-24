@@ -17,6 +17,7 @@ import (
 	repo "social-scribe/backend/internal/repositories"
 	"social-scribe/backend/internal/scheduler"
 	"social-scribe/backend/internal/services"
+	"social-scribe/backend/internal/utils"
 
 	"strings"
 	"time"
@@ -293,6 +294,7 @@ func GetUserInfoHandler(resp http.ResponseWriter, req *http.Request) {
 		http.Error(resp, "Unauthorized: User ID not found", http.StatusUnauthorized)
 		return
 	}
+
 	user, err := repo.GetUserById(userId)
 	if err != nil {
 		log.Printf("[ERROR] Failed to find user for the id: %s and error is %s", userId, err)
@@ -316,29 +318,12 @@ func GetUserInfoHandler(resp http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// CSRF Handling
-	csrfToken := ""
-	cacheKey := fmt.Sprintf("CSRF_%s", userId)
-	tokenData, exists := repo.GetCache(cacheKey)
-
-	if exists {
-		tokenInfo, ok := tokenData.(models.CacheItem)
-		if ok && tokenInfo.ExpiresAt.After(time.Now()) {
-			csrfToken = tokenInfo.Value.(string)
-		} else {
-			// Expired or invalid, generate a new one
-			_ = repo.DeleteCache(cacheKey)
-		}
-	}
-
-	if csrfToken == "" {
-		csrfToken = uuid.New().String()
-		err = repo.SetCache(cacheKey, csrfToken, 10*time.Minute)
-		if err != nil {
-			resp.WriteHeader(http.StatusInternalServerError)
-			resp.Write([]byte(`{"success": false, "reason": "Failed to create CSRF token"}`))
-			return
-		}
+	// Use CSRF helper to get or create a token.
+	csrfToken, err := utils.GetOrCreateCsrfToken(userId)
+	if err != nil {
+		resp.WriteHeader(http.StatusInternalServerError)
+		resp.Write([]byte(`{"success": false, "reason": "Failed to create CSRF token"}`))
+		return
 	}
 
 	resp.Header().Set("X-Csrf-Token", csrfToken)
