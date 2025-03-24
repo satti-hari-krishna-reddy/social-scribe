@@ -10,7 +10,7 @@ import (
 func IPRateLimitMiddleware(limit int, duration time.Duration) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if services.IsIPRateLimited(r, limit, duration) {
+			if services.IsIPRateLimited(r, r.URL.Path, limit, duration) {
 				w.WriteHeader(http.StatusTooManyRequests)
 				w.Write([]byte(`{"success": false, "reason": "Rate limit exceeded"}`))
 				return
