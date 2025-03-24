@@ -178,7 +178,6 @@ func (s *Scheduler) worker(task models.ScheduledBlogData) {
 			log.Printf("[ERROR] Error deleting scheduled task: %v", delErr)
 		}
 
-
 	} else {
 		log.Printf("[INFO] Worker executing task for user %v with blog %v, for platforms %v", task.UserID, task.ScheduledBlog.Blog.Id, task.ScheduledBlog.Platforms)
 
