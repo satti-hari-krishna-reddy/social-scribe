@@ -2,9 +2,9 @@ package middlewares
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"time"
-	"fmt"
 
 	"social-scribe/backend/internal/models"
 	repo "social-scribe/backend/internal/repositories"
@@ -25,6 +25,11 @@ func AuthMiddleware(limit int, duration time.Duration, next http.Handler) http.H
 			w.WriteHeader(http.StatusUnauthorized)
 			w.Write([]byte(`{"success": false, "reason": "Unauthorized: Missing session token"}`))
 			return
+		}
+
+		// Define paths where CSRF should be skipped
+		skipCSRF := map[string]bool{
+			"/api/v1/user/getinfo": true, 
 		}
 
 		sessionData, exists := repo.GetCache(cookie.Value)
@@ -62,25 +67,25 @@ func AuthMiddleware(limit int, duration time.Duration, next http.Handler) http.H
 			w.Write([]byte(`{"success": false, "reason": "Too Many Requests"}`))
 			return
 		}
+		if !skipCSRF[r.URL.Path] {
+			// check for CSRF
+			cacheKey := fmt.Sprintf("CSRF_%s", userID)
+			tokenData, exists := repo.GetCache(cacheKey)
+			if !exists {
+				w.WriteHeader(http.StatusForbidden)
+				w.Write([]byte(`{"success": false, "reason": "CSRF token missing"}`))
+				return
+			}
 
-		// check for CSRF
-		cacheKey := fmt.Sprintf("CSRF_%s", userID)
-		tokenData, exists := repo.GetCache(cacheKey)
-		if !exists {
-			w.WriteHeader(http.StatusForbidden)
-			w.Write([]byte(`{"success": false, "reason": "CSRF token missing"}`))
-			return
-		}
+			tokenInfo, _ := tokenData.(models.CacheItem)
+			expectedToken := tokenInfo.Value
 
-		tokenInfo, _ := tokenData.(models.CacheItem)
-		expectedToken := tokenInfo.Value
-
-		// Get the token from the request header
-		requestToken := r.Header.Get("X-CSRF-Token")
-		if requestToken == "" || requestToken != expectedToken {
-			w.WriteHeader(http.StatusForbidden)
-			w.Write([]byte(`{"success": false, "reason": "Invalid CSRF token"}`))
-			return
+			requestToken := r.Header.Get("X-CSRF-Token")
+			if requestToken == "" || requestToken != expectedToken {
+				w.WriteHeader(http.StatusForbidden)
+				w.Write([]byte(`{"success": false, "reason": "Invalid CSRF token"}`))
+				return
+			}
 		}
 
 		ctx := context.WithValue(r.Context(), UserIDKey, userID)
