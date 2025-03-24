@@ -45,13 +45,13 @@ func mockGetCache(key string) (interface{}, bool) {
 
 // mockIsRateLimited simulates user-based rate limiting.
 // It returns true if the userID equals the hex representation of rateLimitedID.
-func mockIsRateLimited(userID string, limit int, duration time.Duration) bool {
+func mockIsRateLimited(userID string, path string, limit int, duration time.Duration) bool {
 	return userID == rateLimitedID.Hex()
 }
 
 // mockIsIPRateLimited simulates IP-based rate limiting.
 // It returns true if RemoteAddr equals "192.168.1.100:1234".
-func mockIsIPRateLimited(r *http.Request, limit int, duration time.Duration) bool {
+func mockIsIPRateLimited(r *http.Request, path string, limit int, duration time.Duration) bool {
 	return r.RemoteAddr == "192.168.1.100:1234"
 }
 
