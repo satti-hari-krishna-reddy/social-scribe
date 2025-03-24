@@ -18,7 +18,7 @@ const Blogs = ({ apiUrl, csrfToken }) => {
       const response = await fetch(`${apiUrl}/api/v1/user/logout`, {
         method: 'POST',
         headers: {
-          "X-CSRF-Token": csrfToken 
+          "X-Csrf-Token": csrfToken 
       },
         credentials: 'include',
       });
@@ -45,7 +45,7 @@ const Blogs = ({ apiUrl, csrfToken }) => {
         method: 'DELETE',
         headers: {
           "Content-Type": "application/json",
-          "X-CSRF-Token": csrfToken 
+          "X-Csrf-Token": csrfToken 
       },
         credentials: 'include',
         body: JSON.stringify({ password: password }),
@@ -69,7 +69,7 @@ const Blogs = ({ apiUrl, csrfToken }) => {
         method: 'GET',
         headers: {
           "Content-Type": "application/json",
-          "X-CSRF-Token": csrfToken 
+          "X-Csrf-Token": csrfToken,
       },
         credentials: 'include',
       });
