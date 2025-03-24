@@ -5,7 +5,7 @@ import BlogSectionTabs from '../components/BlogSection';
 import { CircularProgress, Box, Button, Modal, Typography, TextField } from '@mui/material'; // Added Modal & Typography here
 import { toast } from 'react-toastify'; // Only add if it's missing and used
 
-const Blogs = ({ apiUrl }) => {
+const Blogs = ({ apiUrl, csrfToken }) => {
   const [blogs, setBlogs] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -17,6 +17,9 @@ const Blogs = ({ apiUrl }) => {
     try {
       const response = await fetch(`${apiUrl}/api/v1/user/logout`, {
         method: 'POST',
+        headers: {
+          "X-CSRF-Token": csrfToken 
+      },
         credentials: 'include',
       });
       if (response.ok) {
@@ -40,7 +43,10 @@ const Blogs = ({ apiUrl }) => {
     try {
       const response = await fetch(`${apiUrl}/api/v1/user/delete-account`, {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": csrfToken 
+      },
         credentials: 'include',
         body: JSON.stringify({ password: password }),
       });
@@ -62,8 +68,9 @@ const Blogs = ({ apiUrl }) => {
       const response = await fetch(apiUrl + `/api/v1/user/blogs?category=${tab}`, {
         method: 'GET',
         headers: {
-          'Content-Type': 'application/json',
-        },
+          "Content-Type": "application/json",
+          "X-CSRF-Token": csrfToken 
+      },
         credentials: 'include',
       });
 
