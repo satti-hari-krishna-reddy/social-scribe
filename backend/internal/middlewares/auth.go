@@ -80,7 +80,7 @@ func AuthMiddleware(limit int, duration time.Duration, next http.Handler) http.H
 			tokenInfo, _ := tokenData.(models.CacheItem)
 			expectedToken := tokenInfo.Value
 
-			requestToken := r.Header.Get("X-CSRF-Token")
+			requestToken := r.Header.Get("X-Csrf-Token")
 			if requestToken == "" || requestToken != expectedToken {
 				w.WriteHeader(http.StatusForbidden)
 				w.Write([]byte(`{"success": false, "reason": "Invalid CSRF token"}`))
@@ -91,6 +91,7 @@ func AuthMiddleware(limit int, duration time.Duration, next http.Handler) http.H
 		ctx := context.WithValue(r.Context(), UserIDKey, userID)
 		w.Header().Set("Content-Security-Policy", "frame-ancestors 'self'")
 		w.Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=(), usb=()")
+		w.Header().Set("Access-Control-Expose-Headers", "X-Csrf-Token") // telling the browser to allow this custom header
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
