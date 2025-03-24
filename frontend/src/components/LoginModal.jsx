@@ -4,7 +4,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 
-const Login = ({ open, handleClose, setUser, setIsLoggedIn, apiUrl }) => {
+const Login = ({ open, handleClose, setUser, setIsLoggedIn, apiUrl, csrfToken, setCsrfToken }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [otp, setOtp] = useState('');
@@ -29,6 +29,7 @@ const Login = ({ open, handleClose, setUser, setIsLoggedIn, apiUrl }) => {
       if (response.ok) {
         setUser(data);
         setIsLoggedIn(true);
+        setCsrfToken(response.headers.get("X-Csrf-Token"));
         if (data?.verified) {
           navigate('/blogs');
         } else {
