@@ -66,11 +66,12 @@ func AuthMiddleware(limit int, duration time.Duration, next http.Handler) http.H
 		userID := oid.Hex()
 
 		// checking for rate limiting
-		if repo.IsRateLimited(userID, limit, duration) {
+		if repo.IsRateLimited(userID, r.URL.Path, limit, duration) {
 			w.WriteHeader(http.StatusTooManyRequests)
 			w.Write([]byte(`{"success": false, "reason": "Too Many Requests"}`))
 			return
 		}
+
 		if !skipCSRF[r.URL.Path] {
 			// check for CSRF
 			cacheKey := fmt.Sprintf("CSRF_%s", userID)
