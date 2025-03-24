@@ -18,6 +18,7 @@ func IPRateLimitMiddleware(limit int, duration time.Duration) func(http.Handler)
 
 			w.Header().Set("Content-Security-Policy", "frame-ancestors 'self'")
 			w.Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=(), usb=()")
+			w.Header().Set("Access-Control-Expose-Headers", "X-Csrf-Token") // telling the browser to allow this custom header
 
 			next.ServeHTTP(w, r)
 		})
