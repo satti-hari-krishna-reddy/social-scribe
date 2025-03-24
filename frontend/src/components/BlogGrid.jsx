@@ -26,7 +26,7 @@ const BlogGrid = ({ blogs, loading, apiUrl, csrfToken }) => {
         method: 'POST',
         credentials: 'include',
         headers: {
-          "X-CSRF-Token": csrfToken 
+          "X-Csrf-Token": csrfToken 
       },
 
       });
