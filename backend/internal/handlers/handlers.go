@@ -163,8 +163,8 @@ func SignupUserHandler(resp http.ResponseWriter, req *http.Request) {
 		return
 	}
 	message := fmt.Sprintf("Your OTP is: %s \n Valid for next 24 hours", otp)
-// this is just a temporary work around to use the existing heap based queue system 
-// to send emails asynchronously and we need a better way to do this in the future
+	// this is just a temporary work around to use the existing heap based queue system
+	// to send emails asynchronously and we need a better way to do this in the future
 	emailTask := models.ScheduledBlogData{}
 	shareTime := models.ScheduledBlog{}
 	shareTime.ScheduledTime = time.Now()
@@ -1133,8 +1133,8 @@ func ResetEmailOtpHandler(resp http.ResponseWriter, req *http.Request) {
 
 	message := fmt.Sprintf("Your OTP is: %s\n OTP will expire in 30 minutes", otp)
 
-// this is just a temporary work around to use the existing heap based queue system 
-// to send emails asynchronously and we need a better way to do this in the future
+	// this is just a temporary work around to use the existing heap based queue system
+	// to send emails asynchronously and we need a better way to do this in the future
 
 	emailTask := models.ScheduledBlogData{}
 	shareTime := models.ScheduledBlog{}
@@ -1198,8 +1198,8 @@ func ForgotPasswordHandler(resp http.ResponseWriter, req *http.Request) {
 
 	message := fmt.Sprintf("Your OTP for password reset is: %s\n(Expires in 10 minutes)", otp)
 
-// this is just a temporary work around to use the existing heap based queue system 
-// to send emails asynchronously and we need a better way to do this in the future
+	// this is just a temporary work around to use the existing heap based queue system
+	// to send emails asynchronously and we need a better way to do this in the future
 
 	emailTask := models.ScheduledBlogData{}
 	shareTime := models.ScheduledBlog{}
