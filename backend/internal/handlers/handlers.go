@@ -187,6 +187,15 @@ func SignupUserHandler(resp http.ResponseWriter, req *http.Request) {
 		http.Error(resp, `{"error": "Failed to process user data"}`, http.StatusInternalServerError)
 		return
 	}
+	// Use CSRF helper to get or create a token.
+	csrfToken, err := utils.GetOrCreateCsrfToken(userId)
+	if err != nil {
+		resp.WriteHeader(http.StatusInternalServerError)
+		resp.Write([]byte(`{"success": false, "reason": "Failed to create CSRF token"}`))
+		return
+	}
+
+	resp.Header().Set("X-Csrf-Token", csrfToken)
 
 	log.Printf("[INFO] User '%s' registered with ID: %s", user.UserName, userId)
 	resp.Header().Set("Content-Type", "application/json")
@@ -254,6 +263,15 @@ func LoginUserHandler(resp http.ResponseWriter, req *http.Request) {
 		resp.Write([]byte(`{"success": false, "reason": "Failed unpacking user"}`))
 		return
 	}
+	// Use CSRF helper to get or create a token.
+	csrfToken, err := utils.GetOrCreateCsrfToken(user.Id.Hex())
+	if err != nil {
+		resp.WriteHeader(http.StatusInternalServerError)
+		resp.Write([]byte(`{"success": false, "reason": "Failed to create CSRF token"}`))
+		return
+	}
+
+	resp.Header().Set("X-Csrf-Token", csrfToken)
 
 	resp.WriteHeader(http.StatusAccepted)
 	resp.Header().Set("Content-Type", "application/json")
