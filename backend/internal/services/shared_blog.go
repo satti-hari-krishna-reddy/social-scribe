@@ -3,8 +3,8 @@ package services
 import (
 	"encoding/json"
 	"fmt"
-	"time"
 	"strings"
+	"time"
 
 	"github.com/dghubble/oauth1"
 	"social-scribe/backend/internal/models"
@@ -92,59 +92,59 @@ func ProcessSharedBlog(user *models.User, blogId string, platforms []string) err
 	if len(content) > maxContentLength {
 		content = content[:maxContentLength] + "..."
 	}
-	// so the idea is to tell the ai to generate both posts in a single request 
+	// so the idea is to tell the ai to generate both posts in a single request
 	prompt := fmt.Sprintf(
 		"Generate two separate social media posts for this blog, one for Twitter (X) and one for LinkedIn.\n\n"+
-		"Title: %s\n"+
-		"Url: %s\n"+
-		"Subtitle: %s\n"+
-		"Brief: %s\n"+
-		"Content snippet: %s\n\n"+
-		"--- Output Format ---\n"+
-		"[TWITTER]\n"+
-		"Your Twitter post here (must be **280 characters or less**, including hashtags and URL)\n\n"+
-		"[LINKEDIN]\n"+
-		"Your LinkedIn post here (no strict length limit)\n\n"+
-		"--- Additional Instructions ---\n"+
-		"- Keep the tone **engaging, conversational, and human**.\n"+
-		"- The Twitter post **MUST fit in 280 characters including hashtags & URL**.\n"+
-		"- Ensure the blog URL is included in both posts.\n"+
-		"- Do NOT add any extra commentary or explanations.\n"+
-		"- Include relevant **hashtags** in both posts.\n"+
-		"- Make the **LinkedIn post slightly longer**, but still concise and engaging.\n"+
-		"- Ensure that the response format is **EXACTLY as specified**, so it can be parsed programmatically.\n",
+			"Title: %s\n"+
+			"Url: %s\n"+
+			"Subtitle: %s\n"+
+			"Brief: %s\n"+
+			"Content snippet: %s\n\n"+
+			"--- Output Format ---\n"+
+			"[TWITTER]\n"+
+			"Your Twitter post here (must be **280 characters or less**, including hashtags and URL)\n\n"+
+			"[LINKEDIN]\n"+
+			"Your LinkedIn post here (no strict length limit)\n\n"+
+			"--- Additional Instructions ---\n"+
+			"- Keep the tone **engaging, conversational, and human**.\n"+
+			"- The Twitter post **MUST fit in 280 characters including hashtags & URL**.\n"+
+			"- Ensure the blog URL is included in both posts.\n"+
+			"- Do NOT add any extra commentary or explanations.\n"+
+			"- Include relevant **hashtags** in both posts.\n"+
+			"- Make the **LinkedIn post slightly longer**, but still concise and engaging.\n"+
+			"- Ensure that the response format is **EXACTLY as specified**, so it can be parsed programmatically.\n",
 		response.Data.Post.Title,
 		response.Data.Post.Url,
 		response.Data.Post.SubTitle,
 		response.Data.Post.Brief,
 		content,
 	)
-	
+
 	aiResponse, err := invokeAi(prompt)
 	if err != nil {
 		return fmt.Errorf("failed to generate post content: %v", err)
 	}
 
-		// Splitting the response
-		twitterTag := "[TWITTER]"
-		linkedinTag := "[LINKEDIN]"
-	
-		twitterStart := strings.Index(aiResponse, twitterTag)
-		linkedinStart := strings.Index(aiResponse, linkedinTag)
-	
-		// Extract Twitter content
-		var twitterPost string
-		if twitterStart != -1 && linkedinStart != -1 {
-			twitterPost = strings.TrimSpace(aiResponse[twitterStart+len(twitterTag) : linkedinStart])
-		} else if twitterStart != -1 {
-			twitterPost = strings.TrimSpace(aiResponse[twitterStart+len(twitterTag):])
-		}
-	
-		// Extract LinkedIn content
-		var linkedinPost string
-		if linkedinStart != -1 {
-			linkedinPost = strings.TrimSpace(aiResponse[linkedinStart+len(linkedinTag):])
-		}
+	// Splitting the response
+	twitterTag := "[TWITTER]"
+	linkedinTag := "[LINKEDIN]"
+
+	twitterStart := strings.Index(aiResponse, twitterTag)
+	linkedinStart := strings.Index(aiResponse, linkedinTag)
+
+	// Extract Twitter content
+	var twitterPost string
+	if twitterStart != -1 && linkedinStart != -1 {
+		twitterPost = strings.TrimSpace(aiResponse[twitterStart+len(twitterTag) : linkedinStart])
+	} else if twitterStart != -1 {
+		twitterPost = strings.TrimSpace(aiResponse[twitterStart+len(twitterTag):])
+	}
+
+	// Extract LinkedIn content
+	var linkedinPost string
+	if linkedinStart != -1 {
+		linkedinPost = strings.TrimSpace(aiResponse[linkedinStart+len(linkedinTag):])
+	}
 
 	for _, platform := range platforms {
 		switch platform {
