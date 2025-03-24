@@ -34,7 +34,7 @@ func GetOrCreateCsrfToken(userID string) (string, error) {
 	// Generate a new token if none exists.
 	if csrfToken == "" {
 		csrfToken = uuid.New().String()
-		err := repo.SetCache(cacheKey, csrfToken, 10*time.Minute)
+		err := repo.SetCache(cacheKey, csrfToken, 10*time.Hour)
 		if err != nil {
 			return "", err
 		}
