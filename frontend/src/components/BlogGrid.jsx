@@ -17,7 +17,7 @@ const modalStyle = {
   width: 300,
 };
 
-const BlogGrid = ({ blogs, loading, apiUrl }) => {
+const BlogGrid = ({ blogs, loading, apiUrl, csrfToken }) => {
   const [openLogoutModal, setOpenLogoutModal] = useState(false);
 
   const handleLogout = async () => {
@@ -25,6 +25,10 @@ const BlogGrid = ({ blogs, loading, apiUrl }) => {
       const response = await fetch(`${apiUrl}/api/v1/user/logout`, {
         method: 'POST',
         credentials: 'include',
+        headers: {
+          "X-CSRF-Token": csrfToken 
+      },
+
       });
       if (response.ok) {
         toast.success('Log out successful');
