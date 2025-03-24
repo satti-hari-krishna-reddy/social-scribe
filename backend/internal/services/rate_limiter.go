@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"social-scribe/backend/internal/repositories"
@@ -12,11 +13,12 @@ import (
 var IsIPRateLimited = defaultIsIPRateLimited
 
 // IsIPRateLimited applies rate limiting per IP
-func defaultIsIPRateLimited(r *http.Request, limit int, duration time.Duration) bool {
+func defaultIsIPRateLimited(r *http.Request, path string, limit int, duration time.Duration) bool {
 	ctx := context.Background()
 	clientIP := utils.GetClientIP(r)
 
-	key := "rate_limit:ip:" + clientIP
+	// key := "rate_limit:ip:" + clientIP
+	key := fmt.Sprintf("rate_limit:ip_%s:%s", path, clientIP)
 
 	count, err := repositories.RedisClient.Incr(ctx, key).Result()
 	if err != nil {
