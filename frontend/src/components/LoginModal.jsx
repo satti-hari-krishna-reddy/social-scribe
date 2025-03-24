@@ -58,7 +58,10 @@ const Login = ({ open, handleClose, setUser, setIsLoggedIn, apiUrl }) => {
     try {
       const response = await fetch(apiUrl + '/api/v1/user/forgot-password', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": csrfToken 
+      },
         body: JSON.stringify({ email }),
       });
       if (response.ok) {
@@ -88,7 +91,10 @@ const Login = ({ open, handleClose, setUser, setIsLoggedIn, apiUrl }) => {
     try {
       const response = await fetch(apiUrl + '/api/v1/user/reset-password', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": csrfToken 
+      },
         body: JSON.stringify({
           email,
           otp,
@@ -130,7 +136,10 @@ const Login = ({ open, handleClose, setUser, setIsLoggedIn, apiUrl }) => {
     try {
       const response = await fetch(apiUrl + '/api/v1/user/forgot-password', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": csrfToken 
+      },
         body: JSON.stringify({ email }),
       });
       if (response.ok) {
