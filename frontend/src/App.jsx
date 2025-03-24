@@ -26,7 +26,8 @@ function App() {
         const data = await response.json();
         setUser(data);
         setIsLoggedIn(true);
-        setCsrfToken(response.headers.get("X-CSRF-Token"));
+        setCsrfToken(response.headers.get("X-Csrf-Token"));
+        console.log(response.headers.get("X-Csrf-Token"))
       }
     } catch (error) {
       console.error('Error fetching user info:', error);
