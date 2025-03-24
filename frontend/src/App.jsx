@@ -27,7 +27,6 @@ function App() {
         setUser(data);
         setIsLoggedIn(true);
         setCsrfToken(response.headers.get("X-Csrf-Token"));
-        console.log(response.headers.get("X-Csrf-Token"))
       }
     } catch (error) {
       console.error('Error fetching user info:', error);
@@ -55,7 +54,7 @@ function App() {
                 <Navigate to="/verification" />
               )
             ) : (
-              <MainPage setIsLoggedIn={setIsLoggedIn} setUser={setUser} apiUrl={API_BASE_URL} />
+              <MainPage setIsLoggedIn={setIsLoggedIn} setUser={setUser} apiUrl={API_BASE_URL} csrfToken={csrfToken} setCsrfToken={setCsrfToken}/>
             )
           }
         />
