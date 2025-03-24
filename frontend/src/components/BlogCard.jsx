@@ -56,7 +56,7 @@ const BlogCard = ({ blog, apiUrl }) => {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          "X-CSRF-Token": csrfToken
+          "X-Csrf-Token": csrfToken
          },
         credentials: 'include',
         body: JSON.stringify({ id: blog.id, platforms }),
@@ -118,7 +118,7 @@ const BlogCard = ({ blog, apiUrl }) => {
         method: 'POST',
         headers: {
           "Content-Type": "application/json",
-          "X-CSRF-Token": csrfToken
+          "X-Csrf-Token": csrfToken
       },
         credentials: 'include',
         body: JSON.stringify(payload),
@@ -143,7 +143,7 @@ const BlogCard = ({ blog, apiUrl }) => {
         method: 'DELETE',
         headers: {
           "Content-Type": "application/json",
-          "X-CSRF-Token": csrfToken 
+          "X-Csrf-Token": csrfToken 
       },
         credentials: 'include',
         body: JSON.stringify(payload),
