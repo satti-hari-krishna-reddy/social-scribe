@@ -4,6 +4,7 @@ package repositories
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -13,7 +14,7 @@ import (
 )
 
 var RedisClient *redis.Client
-var IsRateLimited = defualtIsRateLimited
+var IsRateLimited = defaultIsRateLimited
 
 // InitRedis initializes a persistent connection to Redis.
 func InitRedis() {
@@ -97,9 +98,9 @@ func DeleteRcache(key string) error {
 	return nil
 }
 
-func defualtIsRateLimited(userID string, limit int, duration time.Duration) bool {
+func defaultIsRateLimited(userID, path string, limit int, duration time.Duration) bool {
 	ctx := context.Background()
-	key := "rate_limit:" + userID
+	key := fmt.Sprintf("rate_limit:%s:%s", userID, path)
 
 	count, err := RedisClient.Incr(ctx, key).Result()
 	if err != nil {
