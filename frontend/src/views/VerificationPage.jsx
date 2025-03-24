@@ -6,7 +6,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
 
-const VerificationPage = ({ user, setUser, apiUrl }) => {
+const VerificationPage = ({ user, setUser, apiUrl, csrfToken }) => {
   const [twitterConnected] = useState(user?.x_verified);
   const [linkedinConnected] = useState(user?.linkedin_verified);
   const [hashnodeVerified, setHashnodeVerified] = useState(user?.hashnode_verified);
@@ -36,8 +36,9 @@ const VerificationPage = ({ user, setUser, apiUrl }) => {
       const response = await fetch(apiUrl + '/api/v1/user/verify-hashnode', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-        },
+          "Content-Type": "application/json",
+          "X-CSRF-Token": csrfToken 
+      },
         body: JSON.stringify({
           key: hashnodeApiKey,
         }),
@@ -64,8 +65,9 @@ const VerificationPage = ({ user, setUser, apiUrl }) => {
       const response = await fetch(apiUrl + '/api/v1/user/verify-email', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-        },
+          "Content-Type": "application/json",
+          "X-CSRF-Token": csrfToken 
+      },
         body: JSON.stringify({
           otp,
         }),
@@ -95,8 +97,9 @@ const VerificationPage = ({ user, setUser, apiUrl }) => {
       const response = await fetch(apiUrl + '/api/v1/user/resend-otp', {
         method: 'GET',
         headers: {
-          'Content-Type': 'application/json',
-        },
+          "Content-Type": "application/json",
+          "X-CSRF-Token": csrfToken 
+      },
         credentials: 'include',
       });
       if (response.ok) {
