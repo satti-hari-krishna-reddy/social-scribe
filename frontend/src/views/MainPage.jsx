@@ -6,10 +6,10 @@ import CallToAction from '../components/CallToAction';
 import Footer from '../components/Footer';
 import About from '../components/About';
 
-function MainPage({ setIsLoggedIn, setUser, apiUrl }) {
+function MainPage({ setIsLoggedIn, setUser, apiUrl, csrfToken, setCsrfToken }) {
   return (
     <div>
-      <HeroSection setIsLoggedIn={setIsLoggedIn} setUser={setUser} apiUrl={apiUrl} />
+      <HeroSection setIsLoggedIn={setIsLoggedIn} setUser={setUser} apiUrl={apiUrl} csrfToken={csrfToken} setCsrfToken={setCsrfToken} />
       <HowItWorks />
       <CallToAction />
       <Features />
