@@ -54,7 +54,10 @@ const BlogCard = ({ blog, apiUrl }) => {
     try {
       const response = await fetch(apiUrl + '/api/v1/blogs/user/share', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          "X-CSRF-Token": csrfToken
+         },
         credentials: 'include',
         body: JSON.stringify({ id: blog.id, platforms }),
       });
@@ -113,7 +116,10 @@ const BlogCard = ({ blog, apiUrl }) => {
 
       const response = await fetch(apiUrl + '/api/v1/blogs/schedule', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": csrfToken
+      },
         credentials: 'include',
         body: JSON.stringify(payload),
       });
@@ -135,7 +141,10 @@ const BlogCard = ({ blog, apiUrl }) => {
     try {
       const response = await fetch(apiUrl + '/api/v1/user/scheduled-blogs/cancel', {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": csrfToken 
+      },
         credentials: 'include',
         body: JSON.stringify(payload),
       });
