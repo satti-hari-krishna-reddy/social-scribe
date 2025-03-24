@@ -341,7 +341,7 @@ func GetUserInfoHandler(resp http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	resp.Header().Set("X-CSRF-Token", csrfToken)
+	resp.Header().Set("X-Csrf-Token", csrfToken)
 	resp.WriteHeader(http.StatusOK)
 	resp.Write(responseJson)
 }
