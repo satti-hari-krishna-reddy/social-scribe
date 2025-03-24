@@ -60,7 +60,7 @@ const Login = ({ open, handleClose, setUser, setIsLoggedIn, apiUrl }) => {
         method: 'POST',
         headers: {
           "Content-Type": "application/json",
-          "X-CSRF-Token": csrfToken 
+          "X-Csrf-Token": csrfToken 
       },
         body: JSON.stringify({ email }),
       });
@@ -93,7 +93,7 @@ const Login = ({ open, handleClose, setUser, setIsLoggedIn, apiUrl }) => {
         method: 'POST',
         headers: {
           "Content-Type": "application/json",
-          "X-CSRF-Token": csrfToken 
+          "X-Csrf-Token": csrfToken 
       },
         body: JSON.stringify({
           email,
@@ -138,7 +138,7 @@ const Login = ({ open, handleClose, setUser, setIsLoggedIn, apiUrl }) => {
         method: 'POST',
         headers: {
           "Content-Type": "application/json",
-          "X-CSRF-Token": csrfToken 
+          "X-Csrf-Token": csrfToken 
       },
         body: JSON.stringify({ email }),
       });
