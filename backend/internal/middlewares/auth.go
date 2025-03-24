@@ -29,7 +29,7 @@ func AuthMiddleware(limit int, duration time.Duration, next http.Handler) http.H
 
 		// Define paths where CSRF should be skipped
 		skipCSRF := map[string]bool{
-			"/api/v1/user/getinfo": true, 
+			"/api/v1/user/getinfo": true,
 		}
 
 		sessionData, exists := repo.GetCache(cookie.Value)
