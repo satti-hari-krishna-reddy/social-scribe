@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Box, Typography, TextField, Button, Modal } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 
-const SignUpModal = ({ open, handleClose, setIsLoggedIn, setUser, apiUrl }) => {
+const SignUpModal = ({ open, handleClose, setIsLoggedIn, setUser, apiUrl, setCsrfToken }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -33,6 +33,7 @@ const SignUpModal = ({ open, handleClose, setIsLoggedIn, setUser, apiUrl }) => {
       if (response.ok) {
         setUser(data);
         setIsLoggedIn(true);
+        setCsrfToken(response.headers.get("X-Csrf-Token"));
         navigate('/verification');
       }
     } catch (error) {
