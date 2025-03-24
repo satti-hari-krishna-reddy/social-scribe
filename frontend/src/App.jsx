@@ -7,6 +7,7 @@ import Blogs from './views/Blogs';
 function App() {
   const [user, setUser] = useState(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [csrfToken, setCsrfToken] = useState("")
   const [loading, setLoading] = useState(true);
 
   const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || '';
@@ -25,6 +26,7 @@ function App() {
         const data = await response.json();
         setUser(data);
         setIsLoggedIn(true);
+        setCsrfToken(response.headers.get("X-CSRF-Token"));
       }
     } catch (error) {
       console.error('Error fetching user info:', error);
@@ -64,7 +66,7 @@ function App() {
               user?.verified ? (
                 <Navigate to="/blogs" />
               ) : (
-                <VerificationPage user={user} setUser={setUser} apiUrl={API_BASE_URL} />
+                <VerificationPage user={user} setUser={setUser} apiUrl={API_BASE_URL} csrfToken={csrfToken}/>
               )
             ) : (
               <Navigate to="/" />
@@ -77,7 +79,7 @@ function App() {
           element={
             isLoggedIn ? (
               user?.verified ? (
-                <Blogs apiUrl={API_BASE_URL} />
+                <Blogs apiUrl={API_BASE_URL} csrfToken={csrfToken}/>
               ) : (
                 <Navigate to="/verification" />
               )
