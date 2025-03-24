@@ -308,13 +308,40 @@ func GetUserInfoHandler(resp http.ResponseWriter, req *http.Request) {
 	user.LinkedInOauthKey = ""
 	user.XOAuthToken = ""
 	user.XOAuthSecret = ""
+
 	responseJson, err := json.Marshal(user)
 	if err != nil {
-		resp.WriteHeader(401)
+		resp.WriteHeader(http.StatusUnauthorized)
 		resp.Write([]byte(`{"success": false, "reason": "Failed unpacking"}`))
 		return
 	}
 
+	// CSRF Handling
+	csrfToken := ""
+	cacheKey := fmt.Sprintf("CSRF_%s", userId)
+	tokenData, exists := repo.GetCache(cacheKey)
+
+	if exists {
+		tokenInfo, ok := tokenData.(models.CacheItem)
+		if ok && tokenInfo.ExpiresAt.After(time.Now()) {
+			csrfToken = tokenInfo.Value.(string)
+		} else {
+			// Expired or invalid, generate a new one
+			_ = repo.DeleteCache(cacheKey)
+		}
+	}
+
+	if csrfToken == "" {
+		csrfToken = uuid.New().String()
+		err = repo.SetCache(cacheKey, csrfToken, 10*time.Minute)
+		if err != nil {
+			resp.WriteHeader(http.StatusInternalServerError)
+			resp.Write([]byte(`{"success": false, "reason": "Failed to create CSRF token"}`))
+			return
+		}
+	}
+
+	resp.Header().Set("X-CSRF-Token", csrfToken)
 	resp.WriteHeader(http.StatusOK)
 	resp.Write(responseJson)
 }
