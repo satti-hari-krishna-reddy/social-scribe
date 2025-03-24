@@ -37,7 +37,7 @@ const VerificationPage = ({ user, setUser, apiUrl, csrfToken }) => {
         method: 'POST',
         headers: {
           "Content-Type": "application/json",
-          "X-CSRF-Token": csrfToken 
+          "X-Csrf-Token": csrfToken 
       },
         body: JSON.stringify({
           key: hashnodeApiKey,
@@ -66,7 +66,7 @@ const VerificationPage = ({ user, setUser, apiUrl, csrfToken }) => {
         method: 'POST',
         headers: {
           "Content-Type": "application/json",
-          "X-CSRF-Token": csrfToken 
+          "X-Csrf-Token": csrfToken 
       },
         body: JSON.stringify({
           otp,
@@ -98,7 +98,7 @@ const VerificationPage = ({ user, setUser, apiUrl, csrfToken }) => {
         method: 'GET',
         headers: {
           "Content-Type": "application/json",
-          "X-CSRF-Token": csrfToken 
+          "X-Csrf-Token": csrfToken 
       },
         credentials: 'include',
       });
