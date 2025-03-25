@@ -15,7 +15,7 @@ func TestInvokeAi_Success(t *testing.T) {
 	defer httpmock.DeactivateAndReset()
 
 	mockResponse := `{"candidates": [{"content": {"parts": [{"text": "This is a test AI response"}]}}]}`
-	expectedURL := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=%s", "dummy_key")
+	expectedURL := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=%s", "dummy_key")
 
 	httpmock.RegisterResponder("POST", expectedURL, httpmock.NewStringResponder(200, mockResponse))
 
@@ -29,7 +29,7 @@ func TestInvokeAi_APIError(t *testing.T) {
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
-	expectedURL := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=%s", "dummy_key")
+	expectedURL := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=%s", "dummy_key")
 	httpmock.RegisterResponder("POST", expectedURL, httpmock.NewStringResponder(500, "Internal Server Error"))
 
 	response, err := invokeAi("Test prompt")
@@ -43,7 +43,7 @@ func TestInvokeAi_InvalidJSONResponse(t *testing.T) {
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
-	expectedURL := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=%s", "dummy_key")
+	expectedURL := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=%s", "dummy_key")
 	httpmock.RegisterResponder("POST", expectedURL, httpmock.NewStringResponder(200, "not a json"))
 
 	response, err := invokeAi("Test prompt")
