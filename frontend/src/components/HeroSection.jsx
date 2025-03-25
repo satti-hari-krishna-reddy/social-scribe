@@ -3,7 +3,7 @@ import { Box, Typography, Button } from '@mui/material';
 import Login from './LoginModal';
 import SignUpModal from './SignUpModal';
 
-const HeroSection = ({ setIsLoggedIn, setUser, apiUrl, csrfToken,  setCsrfToken }) => {
+const HeroSection = ({ setIsLoggedIn, setUser, apiUrl, setCsrfToken }) => {
   const [openLogin, setOpenLogin] = useState(false);
   const [openSignUp, setOpenSignUp] = useState(false);
 
@@ -72,7 +72,6 @@ const HeroSection = ({ setIsLoggedIn, setUser, apiUrl, csrfToken,  setCsrfToken 
         setUser={setUser}
         setIsLoggedIn={setIsLoggedIn}
         apiUrl={apiUrl}
-        csrfToken={csrfToken}
         setCsrfToken={setCsrfToken}
       />
       <SignUpModal
