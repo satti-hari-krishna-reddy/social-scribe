@@ -17,19 +17,31 @@ const modalStyle = {
   width: 300,
 };
 
-const BlogGrid = ({ blogs, loading, apiUrl, csrfToken }) => {
+const BlogGrid = ({ blogs, loading, apiUrl, csrfToken, checkLoggedIn }) => {
   const [openLogoutModal, setOpenLogoutModal] = useState(false);
 
   const handleLogout = async () => {
     try {
-      const response = await fetch(`${apiUrl}/api/v1/user/logout`, {
+      let response = await fetch(`${apiUrl}/api/v1/user/logout`, {
         method: 'POST',
         credentials: 'include',
         headers: {
-          "X-Csrf-Token": csrfToken 
-      },
-
+          "X-Csrf-Token": csrfToken,
+        },
       });
+  
+      // If the CSRF token is stale and the server returns a 403, refresh it once.
+      if (response.status === 403) {
+        await checkLoggedIn(); // Refreshes csrfToken
+        response = await fetch(`${apiUrl}/api/v1/user/logout`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            "X-Csrf-Token": csrfToken,
+          },
+        });
+      }
+  
       if (response.ok) {
         toast.success('Log out successful');
         setTimeout(() => window.location.reload(), 1000);
@@ -38,10 +50,11 @@ const BlogGrid = ({ blogs, loading, apiUrl, csrfToken }) => {
       }
     } catch (error) {
       toast.error('Error logging out');
+    } finally {
+      setOpenLogoutModal(false);
     }
-    setOpenLogoutModal(false);
-  };
-
+  }
+  
   const renderContent = () => {
     if (loading) {
       return (
@@ -88,7 +101,7 @@ const BlogGrid = ({ blogs, loading, apiUrl, csrfToken }) => {
           }}
         >
           <Box sx={{ width: 320 }}>
-            <BlogCard blog={blogs[0]} apiUrl={apiUrl} />
+            <BlogCard blog={blogs[0]} apiUrl={apiUrl} checkLoggedIn={checkLoggedIn} />
           </Box>
         </Box>
       );
@@ -98,7 +111,7 @@ const BlogGrid = ({ blogs, loading, apiUrl, csrfToken }) => {
       <Grid container spacing={4} justifyContent="center">
         {blogs.map((blog, index) => (
           <Grid item xs={12} sm={6} md={4} key={index}>
-            <BlogCard blog={blog} apiUrl={apiUrl} />
+            <BlogCard blog={blog} apiUrl={apiUrl} checkLoggedIn={checkLoggedIn} />
           </Grid>
         ))}
       </Grid>
