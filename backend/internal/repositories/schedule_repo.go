@@ -9,7 +9,13 @@ import (
 	"social-scribe/backend/internal/models"
 )
 
-func GetScheduledTasks() ([]models.ScheduledBlogData, error) {
+var (
+	GetScheduledTasks   = defaultGetScheduledTasks
+	StoreScheduledTask  = defualtStoreScheduledTask
+	DeleteScheduledTask = defualtDeleteScheduledTask
+)
+
+func defaultGetScheduledTasks() ([]models.ScheduledBlogData, error) {
 	ctx := context.TODO()
 
 	var scheduledTasks []models.ScheduledBlogData
@@ -29,7 +35,7 @@ func GetScheduledTasks() ([]models.ScheduledBlogData, error) {
 	return scheduledTasks, nil
 }
 
-func StoreScheduledTask(task models.ScheduledBlogData) error {
+func defualtStoreScheduledTask(task models.ScheduledBlogData) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -41,7 +47,7 @@ func StoreScheduledTask(task models.ScheduledBlogData) error {
 	return nil
 }
 
-func DeleteScheduledTask(task models.ScheduledBlogData) error {
+func defualtDeleteScheduledTask(task models.ScheduledBlogData) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
