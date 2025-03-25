@@ -2,10 +2,10 @@ import React from 'react';
 import { useSearchParams } from 'react-router-dom';
 import BlogGrid from '../components/BlogGrid';
 import BlogSectionTabs from '../components/BlogSection';
-import { CircularProgress, Box, Button, Modal, Typography, TextField } from '@mui/material'; // Added Modal & Typography here
-import { toast } from 'react-toastify'; // Only add if it's missing and used
+import { CircularProgress, Box, Button, Modal, Typography, TextField } from '@mui/material'; 
+import { toast } from 'react-toastify'; 
 
-const Blogs = ({ apiUrl, csrfToken }) => {
+const Blogs = ({ apiUrl, csrfToken, checkLoggedIn }) => {
   const [blogs, setBlogs] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -13,15 +13,29 @@ const Blogs = ({ apiUrl, csrfToken }) => {
   const [openDeleteAccountModal, setOpenDeleteAccountModal] = React.useState(false);
   const [password, setPassword] = React.useState('');
 
+
   const handleLogout = async () => {
     try {
-      const response = await fetch(`${apiUrl}/api/v1/user/logout`, {
+      let response = await fetch(`${apiUrl}/api/v1/user/logout`, {
         method: 'POST',
         headers: {
           "X-Csrf-Token": csrfToken 
-      },
+        },
         credentials: 'include',
       });
+  
+      // If a 403 occurs, refresh the token once and retry
+      if (response.status === 403) {
+        await checkLoggedIn(); // This should update csrfToken
+        response = await fetch(`${apiUrl}/api/v1/user/logout`, {
+          method: 'POST',
+          headers: {
+            "X-Csrf-Token": csrfToken 
+          },
+          credentials: 'include',
+        });
+      }
+  
       if (response.ok) {
         toast.success('Log out successful');
         setTimeout(() => window.location.reload(), 1000);
@@ -33,59 +47,90 @@ const Blogs = ({ apiUrl, csrfToken }) => {
     }
     setOpenLogoutModal(false);
   };
-
+  
   const handleAccountDelete = async () => {
     if (!password) {
       toast.error('Please enter your password');
       return;
     }
-
+  
     try {
-      const response = await fetch(`${apiUrl}/api/v1/user/delete-account`, {
+      let response = await fetch(`${apiUrl}/api/v1/user/delete-account`, {
         method: 'DELETE',
         headers: {
           "Content-Type": "application/json",
           "X-Csrf-Token": csrfToken 
-      },
+        },
         credentials: 'include',
         body: JSON.stringify({ password: password }),
       });
+  
+      // If CSRF check fails, refresh the token once and retry
+      if (response.status === 403) {
+        await checkLoggedIn(); // Refreshes csrfToken
+        response = await fetch(`${apiUrl}/api/v1/user/delete-account`, {
+          method: 'DELETE',
+          headers: {
+            "Content-Type": "application/json",
+            "X-Csrf-Token": csrfToken 
+          },
+          credentials: 'include',
+          body: JSON.stringify({ password: password }),
+        });
+      }
+  
       if (response.ok) {
         toast.success('Account Deleted successfully');
         setTimeout(() => window.location.reload(), 500);
-      } else if (response.status == 401) {
-        toast.error('password is incorrect');
+      } else if (response.status === 401) {
+        toast.error('Password is incorrect');
+      } else {
+        toast.error('Error deleting account');
       }
     } catch (error) {
-      toast.error('Error Deleting account');
-      setOpenDeleteAccountModal(false);
+      toast.error('Error deleting account');
     }
+    setOpenDeleteAccountModal(false);
   };
 
   const getBlogs = async (tab) => {
     setLoading(true);
     try {
-      const response = await fetch(apiUrl + `/api/v1/user/blogs?category=${tab}`, {
+      let response = await fetch(apiUrl + `/api/v1/user/blogs?category=${tab}`, {
         method: 'GET',
         headers: {
           "Content-Type": "application/json",
           "X-Csrf-Token": csrfToken,
-      },
+        },
         credentials: 'include',
       });
-
+  
+      // If a 403 is returned, refresh CSRF token and try once more.
+      if (response.status === 403) {
+        // Refresh CSRF token via checkLoggedIn (assumes this function updates csrfToken state)
+        await checkLoggedIn();
+        // Retry the request with the updated CSRF token.
+        response = await fetch(apiUrl + `/api/v1/user/blogs?category=${tab}`, {
+          method: 'GET',
+          headers: {
+            "Content-Type": "application/json",
+            "X-Csrf-Token": csrfToken,
+          },
+          credentials: 'include',
+        });
+      }
+  
       if (!response.ok) {
         const error = await response.json();
-        console.error('Failed to fetch blogs:', error.message || 'Unknown error');
+        toast.error(error.message || 'Unknown error');
         setBlogs([]);
-        setLoading(false);
         return;
       }
-
+  
       const { blogs } = await response.json();
       setBlogs(blogs || []);
     } catch (err) {
-      console.error('An error occurred while fetching blogs:', err.message);
+      toast.error(err.message || 'An error occurred while fetching blogs');
     } finally {
       setLoading(false);
     }
@@ -157,7 +202,7 @@ const Blogs = ({ apiUrl, csrfToken }) => {
           <CircularProgress />
         </Box>
       ) : blogs.length > 0 ? (
-        <BlogGrid blogs={blogs} apiUrl={apiUrl} />
+        <BlogGrid blogs={blogs} apiUrl={apiUrl} csrfToken={csrfToken} checkLoggedIn={checkLoggedIn} />
       ) : (
         <Box
           display="flex"
