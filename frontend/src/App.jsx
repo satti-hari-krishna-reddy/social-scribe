@@ -54,7 +54,7 @@ function App() {
                 <Navigate to="/verification" />
               )
             ) : (
-              <MainPage setIsLoggedIn={setIsLoggedIn} setUser={setUser} apiUrl={API_BASE_URL} csrfToken={csrfToken} setCsrfToken={setCsrfToken}/>
+              <MainPage setIsLoggedIn={setIsLoggedIn} setUser={setUser} apiUrl={API_BASE_URL} setCsrfToken={setCsrfToken} />
             )
           }
         />
@@ -66,7 +66,7 @@ function App() {
               user?.verified ? (
                 <Navigate to="/blogs" />
               ) : (
-                <VerificationPage user={user} setUser={setUser} apiUrl={API_BASE_URL} csrfToken={csrfToken}/>
+                <VerificationPage user={user} setUser={setUser} apiUrl={API_BASE_URL} csrfToken={csrfToken} checkLoggedIn={checkLoggedIn}/>
               )
             ) : (
               <Navigate to="/" />
@@ -79,7 +79,7 @@ function App() {
           element={
             isLoggedIn ? (
               user?.verified ? (
-                <Blogs apiUrl={API_BASE_URL} csrfToken={csrfToken}/>
+                <Blogs apiUrl={API_BASE_URL} csrfToken={csrfToken} checkLoggedIn={checkLoggedIn}/>
               ) : (
                 <Navigate to="/verification" />
               )
