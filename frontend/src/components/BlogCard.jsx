@@ -22,7 +22,7 @@ import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 dayjs.extend(utc);
 
-const BlogCard = ({ blog, apiUrl }) => {
+const BlogCard = ({ blog, apiUrl, checkLoggedIn }) => {
   const location = useLocation();
   const queryParams = new URLSearchParams(location.search);
   const tab = queryParams.get('tab');
@@ -45,22 +45,38 @@ const BlogCard = ({ blog, apiUrl }) => {
     const platforms = [];
     if (shareOptions.linkedin) platforms.push('linkedin');
     if (shareOptions.x) platforms.push('twitter');
-
+  
     if (platforms.length === 0) {
       toast.warning('Please select at least one platform to share!');
       return;
     }
-
+  
     try {
-      const response = await fetch(apiUrl + '/api/v1/blogs/user/share', {
+      // Initial request
+      let response = await fetch(apiUrl + '/api/v1/blogs/user/share', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          "X-Csrf-Token": csrfToken
-         },
+          'X-Csrf-Token': csrfToken,
+        },
         credentials: 'include',
         body: JSON.stringify({ id: blog.id, platforms }),
       });
+  
+      // If CSRF issue detected, refresh token and retry once
+      if (response.status === 403) {
+        await checkLoggedIn();
+        response = await fetch(apiUrl + '/api/v1/blogs/user/share', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'X-Csrf-Token': csrfToken,
+          },
+          credentials: 'include',
+          body: JSON.stringify({ id: blog.id, platforms }),
+        });
+      }
+  
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data.message || 'Failed to share the blog');
@@ -88,23 +104,24 @@ const BlogCard = ({ blog, apiUrl }) => {
     setSelectedDate(newDate);
   };
 
+
   const handleConfirmSchedule = async () => {
     if (!selectedDate || !selectedDate.isValid() || selectedDate.isBefore(dayjs())) {
       toast.warning('Please select a valid future time!');
       return;
     }
-
+  
     const platforms = [];
     if (shareOptions.linkedin) platforms.push('linkedin');
     if (shareOptions.x) platforms.push('twitter');
-
+  
     if (platforms.length === 0) {
       toast.warning('Please select at least one platform to schedule!');
       return;
     }
-
+  
     const scheduledTimeUtc = selectedDate.utc().toISOString();
-
+  
     try {
       const payload = {
         blog: {
@@ -113,16 +130,32 @@ const BlogCard = ({ blog, apiUrl }) => {
           scheduled_time: scheduledTimeUtc,
         },
       };
-
-      const response = await fetch(apiUrl + '/api/v1/blogs/schedule', {
+  
+      // Initial schedule request
+      let response = await fetch(apiUrl + '/api/v1/blogs/schedule', {
         method: 'POST',
         headers: {
-          "Content-Type": "application/json",
-          "X-Csrf-Token": csrfToken
-      },
+          'Content-Type': 'application/json',
+          'X-Csrf-Token': csrfToken,
+        },
         credentials: 'include',
         body: JSON.stringify(payload),
       });
+  
+      // Retry on 403 by refreshing CSRF token once
+      if (response.status === 403) {
+        await checkLoggedIn();
+        response = await fetch(apiUrl + '/api/v1/blogs/schedule', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Csrf-Token': csrfToken,
+          },
+          credentials: 'include',
+          body: JSON.stringify(payload),
+        });
+      }
+  
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data.message || 'Failed to schedule the blog');
@@ -138,16 +171,33 @@ const BlogCard = ({ blog, apiUrl }) => {
 
   const handleCancelSchedule = async () => {
     const payload = { id: blog.id };
+  
     try {
-      const response = await fetch(apiUrl + '/api/v1/user/scheduled-blogs/cancel', {
+      // Initial cancel request
+      let response = await fetch(apiUrl + '/api/v1/user/scheduled-blogs/cancel', {
         method: 'DELETE',
         headers: {
-          "Content-Type": "application/json",
-          "X-Csrf-Token": csrfToken 
-      },
+          'Content-Type': 'application/json',
+          'X-Csrf-Token': csrfToken,
+        },
         credentials: 'include',
         body: JSON.stringify(payload),
       });
+  
+      // Retry on 403 after refreshing token
+      if (response.status === 403) {
+        await checkLoggedIn();
+        response = await fetch(apiUrl + '/api/v1/user/scheduled-blogs/cancel', {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Csrf-Token': csrfToken,
+          },
+          credentials: 'include',
+          body: JSON.stringify(payload),
+        });
+      }
+  
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data.message || 'Failed to cancel the schedule');
