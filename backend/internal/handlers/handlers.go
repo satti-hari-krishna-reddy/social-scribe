@@ -37,6 +37,7 @@ import (
 var twitterConfig = &oauth1.Config{}
 var linkedinConfig = &oauth2.Config{}
 var frontendURL = os.Getenv("FRONTEND_URL")
+var taskScheduler *scheduler.Scheduler
 
 func init() {
 	if os.Getenv("TEST_ENV") == "true" {
@@ -68,8 +69,6 @@ func init() {
 	services.InitTwitterConfig(twitterConfig)
 
 }
-
-var taskScheduler *scheduler.Scheduler
 
 func InitScheduler(s *scheduler.Scheduler) {
 	taskScheduler = s
@@ -290,6 +289,12 @@ func LogoutUserHandler(resp http.ResponseWriter, req *http.Request) {
 		log.Printf("[ERROR] Failed to delete session for user %s: %v", userId, err)
 		http.Error(resp, "Internal server error", http.StatusInternalServerError)
 		return
+	}
+
+	cacheKey := fmt.Sprintf("CSRF_%s", userId)
+	err = repo.DeleteCache(cacheKey)
+	if err != nil {
+		log.Printf("[ERROR] Failed to delete CSRF token for user %s: %s", userId, err)
 	}
 
 	http.SetCookie(resp, &http.Cookie{
@@ -1355,6 +1360,13 @@ func DeleteAccountHandler(resp http.ResponseWriter, req *http.Request) {
 		if err := repo.DeleteCache(cookie.Value); err != nil {
 			log.Printf("[ERROR] Failed to delete session for user %s: %s", userId, err)
 		}
+	}
+
+	// delete csrf tokens related to the user
+	cacheKey := fmt.Sprintf("CSRF_%s", userId)
+	err = repo.DeleteCache(cacheKey)
+	if err != nil {
+		log.Printf("[ERROR] Failed to delete CSRF token for user %s: %s", userId, err)
 	}
 
 	// Clear session cookie from client

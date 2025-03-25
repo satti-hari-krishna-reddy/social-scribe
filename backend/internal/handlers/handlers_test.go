@@ -18,6 +18,7 @@ import (
 	"social-scribe/backend/internal/middlewares"
 	"social-scribe/backend/internal/models"
 	"social-scribe/backend/internal/repositories"
+	"social-scribe/backend/internal/scheduler"
 	"social-scribe/backend/internal/services"
 )
 
@@ -34,6 +35,10 @@ func init() {
 	repositories.SetCache = func(key string, value interface{}, expiration time.Duration) error {
 		return nil
 	}
+	repositories.GetCache = func(key string) (interface{}, bool) {
+		return nil, false
+	}
+
 	// Override OTP generation and email sending.
 	services.GenerateOTP = func() string {
 		return "123456"
@@ -41,6 +46,20 @@ func init() {
 	services.SendEmail = func(toEmail, message string) error {
 		return nil
 	}
+	repositories.GetScheduledTasks = func() ([]models.ScheduledBlogData, error) {
+		return []models.ScheduledBlogData{}, nil
+	}
+	repositories.StoreScheduledTask = func(task models.ScheduledBlogData) error {
+		return nil
+	}
+
+	repositories.DeleteScheduledTask = func(task models.ScheduledBlogData) error {
+		return nil
+	}
+
+	// Initialize scheduler properly for tests.
+	taskScheduler := scheduler.NewScheduler()
+	handlers.InitScheduler(taskScheduler)
 }
 
 func TestSignupUserHandler_Success(t *testing.T) {
