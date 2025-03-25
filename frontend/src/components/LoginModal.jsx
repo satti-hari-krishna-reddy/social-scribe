@@ -4,7 +4,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 
-const Login = ({ open, handleClose, setUser, setIsLoggedIn, apiUrl, csrfToken, setCsrfToken }) => {
+const Login = ({ open, handleClose, setUser, setIsLoggedIn, apiUrl, setCsrfToken}) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [otp, setOtp] = useState('');
@@ -61,7 +61,6 @@ const Login = ({ open, handleClose, setUser, setIsLoggedIn, apiUrl, csrfToken, s
         method: 'POST',
         headers: {
           "Content-Type": "application/json",
-          "X-Csrf-Token": csrfToken 
       },
         body: JSON.stringify({ email }),
       });
@@ -94,7 +93,6 @@ const Login = ({ open, handleClose, setUser, setIsLoggedIn, apiUrl, csrfToken, s
         method: 'POST',
         headers: {
           "Content-Type": "application/json",
-          "X-Csrf-Token": csrfToken 
       },
         body: JSON.stringify({
           email,
@@ -138,8 +136,7 @@ const Login = ({ open, handleClose, setUser, setIsLoggedIn, apiUrl, csrfToken, s
       const response = await fetch(apiUrl + '/api/v1/user/forgot-password', {
         method: 'POST',
         headers: {
-          "Content-Type": "application/json",
-          "X-Csrf-Token": csrfToken 
+          "Content-Type": "application/json"
       },
         body: JSON.stringify({ email }),
       });
