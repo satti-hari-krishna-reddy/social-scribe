@@ -6,7 +6,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
 
-const VerificationPage = ({ user, setUser, apiUrl, csrfToken }) => {
+const VerificationPage = ({ user, setUser, apiUrl, csrfToken, checkLoggedIn }) => {
   const [twitterConnected] = useState(user?.x_verified);
   const [linkedinConnected] = useState(user?.linkedin_verified);
   const [hashnodeVerified, setHashnodeVerified] = useState(user?.hashnode_verified);
@@ -31,48 +31,86 @@ const VerificationPage = ({ user, setUser, apiUrl, csrfToken }) => {
     if (!hashnodeApiKey) {
       return;
     }
-
+  
     try {
-      const response = await fetch(apiUrl + '/api/v1/user/verify-hashnode', {
+      let response = await fetch(apiUrl + '/api/v1/user/verify-hashnode', {
         method: 'POST',
         headers: {
           "Content-Type": "application/json",
-          "X-Csrf-Token": csrfToken 
-      },
+          "X-Csrf-Token": csrfToken
+        },
         body: JSON.stringify({
           key: hashnodeApiKey,
         }),
         credentials: 'include',
       });
+  
+      // Retry once if CSRF error occurs
+      if (response.status === 403) {
+        await checkLoggedIn(); // Refresh the CSRF token
+        response = await fetch(apiUrl + '/api/v1/user/verify-hashnode', {
+          method: 'POST',
+          headers: {
+            "Content-Type": "application/json",
+            "X-Csrf-Token": csrfToken
+          },
+          body: JSON.stringify({
+            key: hashnodeApiKey,
+          }),
+          credentials: 'include',
+        });
+      }
+  
       if (response.ok) {
         user.hashnode_verified = true;
         setUser(user);
         setHashnodeVerified(true);
+      } else {
+        const data = await response.json();
+        toast.error(data.message || 'Failed to verify Hashnode');
       }
     } catch (error) {
-      console.error('Error fetching user info:', error);
+      console.error('Error verifying Hashnode:', error.message);
+      toast.error('Error verifying Hashnode');
     } finally {
       setLoading(false);
     }
   };
-
+  
   const handleOtpVerify = async () => {
     if (otp === '') {
       toast.error('Please enter OTP');
       return;
     }
     try {
-      const response = await fetch(apiUrl + '/api/v1/user/verify-email', {
+      let response = await fetch(apiUrl + '/api/v1/user/verify-email', {
         method: 'POST',
         headers: {
           "Content-Type": "application/json",
-          "X-Csrf-Token": csrfToken 
-      },
+          "X-Csrf-Token": csrfToken
+        },
         body: JSON.stringify({
           otp,
         }),
         credentials: 'include',
       });
+  
+      // Retry once if CSRF error occurs
+      if (response.status === 403) {
+        await checkLoggedIn();
+        response = await fetch(apiUrl + '/api/v1/user/verify-email', {
+          method: 'POST',
+          headers: {
+            "Content-Type": "application/json",
+            "X-Csrf-Token": csrfToken
+          },
+          body: JSON.stringify({
+            otp,
+          }),
+          credentials: 'include',
+        });
+      }
+  
       if (response.ok) {
         user.email_verified = true;
         setEmailVerified(true);
@@ -88,30 +126,54 @@ const VerificationPage = ({ user, setUser, apiUrl, csrfToken }) => {
         setOtpStatus('failed');
       }
     } catch (error) {
-      console.error('Error Verifying OTP:', error);
+      console.error('Error Verifying OTP:', error.message);
+      toast.error('Error verifying OTP');
     }
   };
-
+  
   const handleResendOtp = async () => {
+    if (!email) {
+      toast.error('Email is required to resend OTP');
+      return;
+    }
     try {
-      const response = await fetch(apiUrl + '/api/v1/user/resend-otp', {
+      let response = await fetch(apiUrl + '/api/v1/user/resend-otp', {
         method: 'GET',
         headers: {
           "Content-Type": "application/json",
-          "X-Csrf-Token": csrfToken 
-      },
+          "X-Csrf-Token": csrfToken
+        },
         credentials: 'include',
       });
+  
+      // Retry once if CSRF error occurs
+      if (response.status === 403) {
+        await checkLoggedIn();
+        response = await fetch(apiUrl + '/api/v1/user/resend-otp', {
+          method: 'GET',
+          headers: {
+            "Content-Type": "application/json",
+            "X-Csrf-Token": csrfToken
+          },
+          credentials: 'include',
+        });
+      }
+  
       if (response.ok) {
         toast.success('OTP sent successfully');
+      } else if (response.status === 429) {
+        const data = await response.json();
+        setError(data.reason || 'Too Many Requests');
+        toast.error('Too many requests. Wait for 1 minute before trying again');
       } else {
-        toast.error('Failed to send OTP');
+        const data = await response.json();
+        toast.error(data.message || 'Failed to resend OTP');
       }
     } catch (error) {
       toast.error('Failed to send OTP');
     }
   };
-
+  
   const handleNext = () => {
     setUser({
       ...user,
