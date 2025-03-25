@@ -11,12 +11,14 @@ import (
 	"social-scribe/backend/internal/repositories"
 	"social-scribe/backend/internal/services"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // Create a fixed ObjectID for rate-limited users.
 var rateLimitedID, _ = primitive.ObjectIDFromHex("000000000000000000000001")
+var csrfToken = uuid.New().String()
 
 // mockGetCache simulates session lookup.
 // It returns a valid session for "valid_token" and "rate_limited_token".
@@ -39,6 +41,13 @@ func mockGetCache(key string) (interface{}, bool) {
 			ExpiresAt: time.Now().Add(-10 * time.Minute),
 		}, true
 	default:
+		// For keys starting with "CSRF_", return a cache item with the global csrfToken.
+		if len(key) >= 5 && key[:5] == "CSRF_" {
+			return models.CacheItem{
+				Value:     csrfToken,
+				ExpiresAt: time.Now().Add(10 * time.Minute),
+			}, true
+		}
 		return nil, false
 	}
 }
@@ -81,7 +90,7 @@ func TestAuthMiddleware(t *testing.T) {
 			if tt.token != "" {
 				req.AddCookie(&http.Cookie{Name: "session_token", Value: tt.token})
 			}
-
+			req.Header.Set("X-Csrf-Token", csrfToken)
 			rec := httptest.NewRecorder()
 			// Create AuthMiddleware with limit 5 requests per 10 seconds.
 			handler := AuthMiddleware(5, 10*time.Second, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
