@@ -44,13 +44,14 @@ services:
       TWITTER_CONSUMER_KEY: ${TWITTER_CONSUMER_KEY}
       TWITTER_CONSUMER_SECRET: ${TWITTER_CONSUMER_SECRET}
       TWITTER_CALLBACK_URL: ${TWITTER_CALLBACK_URL}
+      FRONTEND_URL: "http://localhost:3000"
       GEMINI_API_KEY: ${GEMINI_API_KEY}
       MAILGUN_API_KEY: ${MAILGUN_API_KEY}
       MAILGUN_DOMAIN: ${MAILGUN_DOMAIN}
       MAILGUN_EMAIL: ${MAILGUN_EMAIL}
       MAILGUN_SENDER_NAME: ${MAILGUN_SENDER_NAME}
-      MONGO_URI: "mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongodb:27017/${MONGO_DB}?authSource=${MONGO_AUTH_SOURCE}"
-      REDIS_ADDRESS: "redis://redis-container:6379"
+      MONGO_URI: "mongodb://${MONGO_USER}:${MONGO_PASSWORD}@${MONGO_HOST}:27017/${MONGO_DB}?authSource=${MONGO_AUTH_SOURCE}"
+      REDIS_ADDR: "redis-container:6379"
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       REDIS_DB: ${REDIS_DB}
     ports:
@@ -65,7 +66,7 @@ services:
     environment:
       - BACKEND_URL=http://backend:9696
     ports:
-      - "3000:3000"
+      - "3000:80" 
     networks:
       - app_network
 
