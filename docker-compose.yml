@@ -1,0 +1,78 @@
+version: "3.8"
+
+services:
+  redis:
+    image: redis:latest
+    container_name: redis-container
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    ports:
+      - "6379:6379"
+    networks:
+      - app_network
+    volumes:
+      - redis_data:/data
+
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGO_DB}
+    ports:
+      - "27017:27017"
+    networks:
+      - app_network
+    volumes:
+      - mongo_data:/data/db
+
+  backend:
+    image: sattihari/backend:latest 
+    container_name: backend
+    restart: unless-stopped
+    depends_on:
+      - redis
+      - mongodb
+    environment:
+      LINKEDIN_CLIENT_ID: ${LINKEDIN_CLIENT_ID}
+      LINKEDIN_CALLBACK_URL: ${LINKEDIN_CALLBACK_URL}
+      LINKEDIN_CLIENT_SECRET: ${LINKEDIN_CLIENT_SECRET}
+      TWITTER_CONSUMER_KEY: ${TWITTER_CONSUMER_KEY}
+      TWITTER_CONSUMER_SECRET: ${TWITTER_CONSUMER_SECRET}
+      TWITTER_CALLBACK_URL: ${TWITTER_CALLBACK_URL}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      MAILGUN_API_KEY: ${MAILGUN_API_KEY}
+      MAILGUN_DOMAIN: ${MAILGUN_DOMAIN}
+      MAILGUN_EMAIL: ${MAILGUN_EMAIL}
+      MAILGUN_SENDER_NAME: ${MAILGUN_SENDER_NAME}
+      MONGO_URI: "mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongodb:27017/${MONGO_DB}?authSource=${MONGO_AUTH_SOURCE}"
+      REDIS_ADDRESS: "redis://redis-container:6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_DB: ${REDIS_DB}
+    ports:
+      - "9696:9696"
+    networks:
+      - app_network
+
+  frontend:
+    image: sattihari/frontend:latest
+    container_name: frontend
+    restart: unless-stopped
+    environment:
+      - BACKEND_URL=http://backend:9696
+    ports:
+      - "3000:3000"
+    networks:
+      - app_network
+
+networks:
+  app_network:
+    driver: bridge
+
+volumes:
+  redis_data:
+  mongo_data:
