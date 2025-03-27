@@ -31,10 +31,15 @@ jobs:
           fi
 
       - name: "Run tests"
-        run: go test ./...
+        run: |
+          export TEST_ENV=true
+          cd backend
+          go test ./...
 
       - name: "Build project"
-        run: go build ./cmd/main.go
+        run: |
+          cd backend
+          go build ./cmd/main.go
 
       - name: "Set up CodeQL"
         uses: github/codeql-action/init@v2
@@ -42,10 +47,13 @@ jobs:
           languages: go
 
       - name: "Create CodeQL database"
-        run: codeql database create codeql-db --language=go --source-root=.
+        run: |
+          cd backend
+          codeql database create codeql-db --language=go --source-root=.
 
       - name: "Run CodeQL analysis"
         run: |
+          cd backend
           codeql analyze codeql-db \
             --format=sarif-latest \
             --output=results.sarif
@@ -53,7 +61,7 @@ jobs:
       - name: "Upload SARIF results"
         uses: github/codeql-action/upload-sarif@v2
         with:
-          sarif_file: results.sarif
+          sarif_file: backend/results.sarif
 
       - name: "Check Prettier formatting in frontend"
         run: |
@@ -73,4 +81,6 @@ jobs:
           sudo apt-get install -y docker-compose
 
       - name: "Build Docker Image"
-        run: docker-compose build
+        run: |
+          cd backend
+          docker-compose build
