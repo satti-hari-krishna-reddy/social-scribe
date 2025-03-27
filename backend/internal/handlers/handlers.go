@@ -43,15 +43,15 @@ func init() {
 	if os.Getenv("TEST_ENV") == "true" {
 		return // Skip loading .env in tests ?? Hmmm, is there a beter way ?
 	}
-	err := godotenv.Load("../../.env")
-	if err != nil {
-		log.Printf("Error loading .env file: %v", err)
+	if err := godotenv.Load("../../.env"); err != nil {
+		log.Println("[INFO] No .env file found, relying on system environment variables")
 	}
 	frontendURL = os.Getenv("FRONTEND_URL")
 	if frontendURL == "" {
-		log.Println("[WARN] FRONTEND_URL not set in .env, using default")
+		log.Println("[WARN] FRONTEND_URL not set, using default")
 		frontendURL = "http://localhost:5173"
 	}
+
 	twitterConfig = &oauth1.Config{
 		ConsumerKey:    os.Getenv("TWITTER_CONSUMER_KEY"),
 		ConsumerSecret: os.Getenv("TWITTER_CONSUMER_SECRET"),
