@@ -10,7 +10,7 @@ import (
 )
 
 func TestInvokeAi_Success(t *testing.T) {
-	os.Setenv("API_KEY", "dummy_key")
+	os.Setenv("GEMINI_API_KEY", "dummy_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
@@ -25,7 +25,7 @@ func TestInvokeAi_Success(t *testing.T) {
 }
 
 func TestInvokeAi_APIError(t *testing.T) {
-	os.Setenv("API_KEY", "dummy_key")
+	os.Setenv("GEMINI_API_KEY", "dummy_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
@@ -39,7 +39,7 @@ func TestInvokeAi_APIError(t *testing.T) {
 }
 
 func TestInvokeAi_InvalidJSONResponse(t *testing.T) {
-	os.Setenv("API_KEY", "dummy_key")
+	os.Setenv("GEMINI_API_KEY", "dummy_key")
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
