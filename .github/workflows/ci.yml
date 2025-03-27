@@ -1,25 +1,26 @@
-name: "CI Workflow with CodeQL and Formatting Check"
+---
+name: "CI Workflow with CodeQL, Docker Build, and Formatting Check"
 
 on:
   pull_request:
     branches:
-      - main
+      - "main"
 
 jobs:
   lint-and-analyze:
-    name: Run tests, build, and CodeQL analysis with formatting check
+    name: "Run tests, build, and CodeQL analysis with formatting check"
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: "Checkout repository"
         uses: actions/checkout@v2
 
-      - name: Set up Go
+      - name: "Set up Go"
         uses: actions/setup-go@v3
         with:
-          go-version: 1.23.3 
+          go-version: "1.23.3"
 
-      - name: Check Go formatting
+      - name: "Check Go formatting"
         run: |
           unformatted=$(gofmt -l .)
           if [ -n "$unformatted" ]; then
@@ -30,27 +31,40 @@ jobs:
             echo "All files are properly formatted."
           fi
 
-      - name: Run tests
+      - name: "Run tests"
         run: go test ./...
 
-      - name: Build project
+      - name: "Build project"
         run: go build ./cmd/main.go
 
-      - name: Set up CodeQL
+      - name: "Set up CodeQL"
         uses: github/codeql-action/setup-codeql@v2
 
-      - name: Create CodeQL database
+      - name: "Create CodeQL database"
         run: codeql database create codeql-db --language=go --source-root=.
 
-      - name: Run CodeQL analysis
-        run: codeql analyze codeql-db --format=sarif-latest --output=results.sarif
+      - name: "Run CodeQL analysis"
+        run: |
+          codeql analyze codeql-db \
+            --format=sarif-latest \
+            --output=results.sarif
 
-      - name: Upload SARIF results
+      - name: "Upload SARIF results"
         uses: github/codeql-action/upload-sarif@v2
         with:
           sarif_file: results.sarif
 
-      - name: Check Prettier formatting in frontend
+      - name: "Check Prettier formatting in frontend"
         run: |
           cd frontend
           npx prettier --check .
+
+  docker-build-test:
+    name: "Test Docker Build"
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Checkout repository"
+        uses: actions/checkout@v2
+
+      - name: "Build Docker Image"
+        run: docker-compose build
