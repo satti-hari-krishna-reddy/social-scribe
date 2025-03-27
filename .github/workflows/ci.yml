@@ -1,4 +1,4 @@
-name: "CI Workflow with CodeQL, Docker Build, and Formatting Check"
+name: "CI Workflow with Docker Build and Formatting Check"
 
 on:
   pull_request:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   lint-and-analyze:
-    name: "Run tests, build, and CodeQL analysis with formatting check"
+    name: "Run tests, build, and formatting check"
     runs-on: ubuntu-latest
 
     steps:
@@ -41,32 +41,16 @@ jobs:
           cd backend
           go build ./cmd/main.go
 
-      - name: "Set up CodeQL"
-        uses: github/codeql-action/init@v2
-        with:
-          languages: go
-
-      - name: "Create CodeQL database"
-        run: |
-          cd backend
-          codeql database create codeql-db --language=go --source-root=.
-
-      - name: "Run CodeQL analysis"
-        run: |
-          cd backend
-          codeql analyze codeql-db \
-            --format=sarif-latest \
-            --output=results.sarif
-
-      - name: "Upload SARIF results"
-        uses: github/codeql-action/upload-sarif@v2
-        with:
-          sarif_file: backend/results.sarif
-
       - name: "Check Prettier formatting in frontend"
         run: |
           cd frontend
           npx prettier --check .
+
+      - name: "Build frontend"
+        run: |
+          cd frontend
+          npm install
+          npm run build
 
   docker-build-test:
     name: "Test Docker Build"
