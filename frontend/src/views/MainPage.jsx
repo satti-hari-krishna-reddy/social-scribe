@@ -9,7 +9,12 @@ import About from '../components/About';
 function MainPage({ setIsLoggedIn, setUser, apiUrl, setCsrfToken }) {
   return (
     <div>
-      <HeroSection setIsLoggedIn={setIsLoggedIn} setUser={setUser} apiUrl={apiUrl} setCsrfToken={setCsrfToken} />
+      <HeroSection
+        setIsLoggedIn={setIsLoggedIn}
+        setUser={setUser}
+        apiUrl={apiUrl}
+        setCsrfToken={setCsrfToken}
+      />
       <HowItWorks />
       <CallToAction />
       <Features />
