@@ -28,14 +28,10 @@ func init() {
 		return
 	}
 
-	envPath := os.Getenv("ENV_PATH")
-	if envPath == "" {
-		envPath = "../../.env"
+	if err := godotenv.Load("../../.env"); err != nil {
+		log.Println("[INFO] No .env file found, relying on system environment variables")
 	}
-	if err := godotenv.Load(envPath); err != nil {
-		log.Fatalf("Error loading .env file from %s: %v", envPath, err)
-	}
-
+	
 	mailgunAPIKey = os.Getenv("MAILGUN_API_KEY")
 	domain = os.Getenv("MAILGUN_DOMAIN")
 	senderName = os.Getenv("MAILGUN_SENDER_NAME")
