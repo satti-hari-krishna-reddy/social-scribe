@@ -31,28 +31,28 @@ const VerificationPage = ({ user, setUser, apiUrl, csrfToken, checkLoggedIn }) =
     if (!hashnodeApiKey) {
       return;
     }
-  
+
     try {
       let response = await fetch(apiUrl + '/api/v1/user/verify-hashnode', {
         method: 'POST',
         headers: {
-          "Content-Type": "application/json",
-          "X-Csrf-Token": csrfToken
+          'Content-Type': 'application/json',
+          'X-Csrf-Token': csrfToken,
         },
         body: JSON.stringify({
           key: hashnodeApiKey,
         }),
         credentials: 'include',
       });
-  
+
       // Retry once if CSRF error occurs
       if (response.status === 403) {
         await checkLoggedIn(); // Refresh the CSRF token
         response = await fetch(apiUrl + '/api/v1/user/verify-hashnode', {
           method: 'POST',
           headers: {
-            "Content-Type": "application/json",
-            "X-Csrf-Token": csrfToken
+            'Content-Type': 'application/json',
+            'X-Csrf-Token': csrfToken,
           },
           body: JSON.stringify({
             key: hashnodeApiKey,
@@ -60,7 +60,7 @@ const VerificationPage = ({ user, setUser, apiUrl, csrfToken, checkLoggedIn }) =
           credentials: 'include',
         });
       }
-  
+
       if (response.ok) {
         user.hashnode_verified = true;
         setUser(user);
@@ -76,7 +76,7 @@ const VerificationPage = ({ user, setUser, apiUrl, csrfToken, checkLoggedIn }) =
       setLoading(false);
     }
   };
-  
+
   const handleOtpVerify = async () => {
     if (otp === '') {
       toast.error('Please enter OTP');
@@ -86,23 +86,23 @@ const VerificationPage = ({ user, setUser, apiUrl, csrfToken, checkLoggedIn }) =
       let response = await fetch(apiUrl + '/api/v1/user/verify-email', {
         method: 'POST',
         headers: {
-          "Content-Type": "application/json",
-          "X-Csrf-Token": csrfToken
+          'Content-Type': 'application/json',
+          'X-Csrf-Token': csrfToken,
         },
         body: JSON.stringify({
           otp,
         }),
         credentials: 'include',
       });
-  
+
       // Retry once if CSRF error occurs
       if (response.status === 403) {
         await checkLoggedIn();
         response = await fetch(apiUrl + '/api/v1/user/verify-email', {
           method: 'POST',
           headers: {
-            "Content-Type": "application/json",
-            "X-Csrf-Token": csrfToken
+            'Content-Type': 'application/json',
+            'X-Csrf-Token': csrfToken,
           },
           body: JSON.stringify({
             otp,
@@ -110,7 +110,7 @@ const VerificationPage = ({ user, setUser, apiUrl, csrfToken, checkLoggedIn }) =
           credentials: 'include',
         });
       }
-  
+
       if (response.ok) {
         user.email_verified = true;
         setEmailVerified(true);
@@ -130,7 +130,7 @@ const VerificationPage = ({ user, setUser, apiUrl, csrfToken, checkLoggedIn }) =
       toast.error('Error verifying OTP');
     }
   };
-  
+
   const handleResendOtp = async () => {
     if (!email) {
       toast.error('Email is required to resend OTP');
@@ -140,25 +140,25 @@ const VerificationPage = ({ user, setUser, apiUrl, csrfToken, checkLoggedIn }) =
       let response = await fetch(apiUrl + '/api/v1/user/resend-otp', {
         method: 'GET',
         headers: {
-          "Content-Type": "application/json",
-          "X-Csrf-Token": csrfToken
+          'Content-Type': 'application/json',
+          'X-Csrf-Token': csrfToken,
         },
         credentials: 'include',
       });
-  
+
       // Retry once if CSRF error occurs
       if (response.status === 403) {
         await checkLoggedIn();
         response = await fetch(apiUrl + '/api/v1/user/resend-otp', {
           method: 'GET',
           headers: {
-            "Content-Type": "application/json",
-            "X-Csrf-Token": csrfToken
+            'Content-Type': 'application/json',
+            'X-Csrf-Token': csrfToken,
           },
           credentials: 'include',
         });
       }
-  
+
       if (response.ok) {
         toast.success('OTP sent successfully');
       } else if (response.status === 429) {
@@ -173,7 +173,7 @@ const VerificationPage = ({ user, setUser, apiUrl, csrfToken, checkLoggedIn }) =
       toast.error('Failed to send OTP');
     }
   };
-  
+
   const handleNext = () => {
     setUser({
       ...user,
