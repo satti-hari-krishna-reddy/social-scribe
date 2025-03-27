@@ -10,7 +10,7 @@ import (
 )
 
 func invokeAi(prompt string) (string, error) {
-	apiKey := os.Getenv("API_KEY")
+	apiKey := os.Getenv("GEMINI_API_KEY")
 	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=%s", apiKey)
 
 	// Request payload
