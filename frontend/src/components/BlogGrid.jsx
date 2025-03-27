@@ -26,10 +26,10 @@ const BlogGrid = ({ blogs, loading, apiUrl, csrfToken, checkLoggedIn }) => {
         method: 'POST',
         credentials: 'include',
         headers: {
-          "X-Csrf-Token": csrfToken,
+          'X-Csrf-Token': csrfToken,
         },
       });
-  
+
       // If the CSRF token is stale and the server returns a 403, refresh it once.
       if (response.status === 403) {
         await checkLoggedIn(); // Refreshes csrfToken
@@ -37,11 +37,11 @@ const BlogGrid = ({ blogs, loading, apiUrl, csrfToken, checkLoggedIn }) => {
           method: 'POST',
           credentials: 'include',
           headers: {
-            "X-Csrf-Token": csrfToken,
+            'X-Csrf-Token': csrfToken,
           },
         });
       }
-  
+
       if (response.ok) {
         toast.success('Log out successful');
         setTimeout(() => window.location.reload(), 1000);
@@ -53,8 +53,8 @@ const BlogGrid = ({ blogs, loading, apiUrl, csrfToken, checkLoggedIn }) => {
     } finally {
       setOpenLogoutModal(false);
     }
-  }
-  
+  };
+
   const renderContent = () => {
     if (loading) {
       return (
