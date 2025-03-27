@@ -31,7 +31,7 @@ func init() {
 	if err := godotenv.Load("../../.env"); err != nil {
 		log.Println("[INFO] No .env file found, relying on system environment variables")
 	}
-	
+
 	mailgunAPIKey = os.Getenv("MAILGUN_API_KEY")
 	domain = os.Getenv("MAILGUN_DOMAIN")
 	senderName = os.Getenv("MAILGUN_SENDER_NAME")
