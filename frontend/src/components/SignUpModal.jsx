@@ -33,7 +33,7 @@ const SignUpModal = ({ open, handleClose, setIsLoggedIn, setUser, apiUrl, setCsr
       if (response.ok) {
         setUser(data);
         setIsLoggedIn(true);
-        setCsrfToken(response.headers.get("X-Csrf-Token"));
+        setCsrfToken(response.headers.get('X-Csrf-Token'));
         navigate('/verification');
       }
     } catch (error) {
